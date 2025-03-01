@@ -18,6 +18,8 @@ import pdfCommand from './commands/pdf';
 import cleanCommand from './commands/clean';
 // @ts-ignore
 import bibtexCommand from './commands/bibtex';
+// @ts-ignore
+import bibtexWebCommand from './commands/bibtex-web';
 import { CommandOptions } from './types';
 
 // Set up CLI
@@ -35,6 +37,7 @@ sourceCommand(program);
 pdfCommand(program);
 cleanCommand(program);
 bibtexCommand(program);
+bibtexWebCommand(program);
 
 // Handle direct URL input (default to download command)
 program

@@ -1,157 +1,94 @@
-# arXiv Downloader
+# arXiv Downloader (adown)
 
-A command-line tool for downloading and managing arXiv papers, including both PDF and LaTeX source files. Built with TypeScript for better maintainability and type safety.
+A command-line tool for downloading and managing arXiv papers, including both PDF and LaTeX source files.
 
 ## Features
 
-- Download papers from arXiv by URL or ID
+- Download papers from arXiv by URL
 - Organize papers with tags
-- Search and list downloaded papers
-- Open PDF and source files
-- Delete papers when no longer needed
-- Clean the entire database and remove all stored papers
-- Export BibTeX citations for papers
+- List and search your paper collection
+- Export BibTeX citations
+- Web interface for BibTeX export with search and selection
 
 ## Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/arxiv-downloader.git
-cd arxiv-downloader
-
-# Install dependencies
-npm install
-
-# Build the TypeScript code
-npm run build
-
-# Link the command globally
-npm link
+npm install -g arxiv-downloader
 ```
 
 ## Usage
 
-The tool provides several commands for managing arXiv papers:
-
 ### Download a paper
 
 ```bash
-# Download a paper with the default tag
-adown https://arxiv.org/abs/2007.12324
+adown https://arxiv.org/abs/2101.12345
+```
 
-# Download a paper with a specific tag
-adown https://arxiv.org/abs/2007.12324 -t machine-learning
+Or with a tag:
+
+```bash
+adown https://arxiv.org/abs/2101.12345 -t machine-learning
 ```
 
 ### List papers
 
 ```bash
-# List all papers
-adown ls
-
-# Search papers by keywords
-adown ls context knowledge
-
-# List papers by tag
-adown ls -t knowledge-tracing
+adown list
 ```
 
-### Delete papers
+Filter by tag:
 
 ```bash
-# Search and delete a paper
-adown delete context knowledge
-
-# Delete all papers with a specific tag
-adown delete -t knowledge-tracing
-
-# Force delete without confirmation
-adown delete -t knowledge-tracing -f
+adown list -t machine-learning
 ```
 
-### Open paper files
+Search by terms:
 
 ```bash
-# Open source files of a paper
-adown source context knowledge
-
-# Open PDF of a paper
-adown pdf context knowledge
+adown list neural networks
 ```
 
-### Export BibTeX citations
+### Export BibTeX
+
+Command line export:
 
 ```bash
-# Export BibTeX for papers matching search terms
-adown bibtex context knowledge
-
-# Export BibTeX for papers with a specific tag
-adown bibtex -t machine-learning
-
-# Export BibTeX for all papers without selection
-adown bibtex -a
-
-# Export BibTeX to a file
-adown bibtex -o citations.bib
+adown bibtex -a  # Export all papers
+adown bibtex -t machine-learning  # Export papers with a specific tag
+adown bibtex neural networks  # Export papers matching search terms
 ```
 
-### Clean database and files
+### Web Interface for BibTeX Export
+
+Start the web interface for BibTeX export:
 
 ```bash
-# Clean the entire database and remove all stored papers (with confirmation)
-adown clean
-
-# Force clean without confirmation
-adown clean -f
+adown bibtex-web
 ```
 
-## File Structure
+This will start a local web server and open your browser. The web interface allows you to:
 
-Papers are stored in the `~/Development/arxiv` directory, organized by tags:
+- Search papers by title, author, or abstract
+- Filter papers by tag
+- Select papers individually or all at once
+- Preview BibTeX entries
+- Copy BibTeX to clipboard
+- Export BibTeX to a file
 
-```
-~/Development/arxiv/
-├── default/
-│   ├── Paper Title 1/
-│   │   ├── paper.pdf
-│   │   ├── source.tar.gz
-│   │   └── citation.bib
-│   └── Paper Title 2/
-└── machine-learning/
-    └── Paper Title 3/
-```
-
-## Project Structure
-
-```
-arxiv-downloader/
-├── src/                  # TypeScript source files
-│   ├── index.ts          # Entry point
-│   ├── commands/         # Command implementations
-│   └── utils/            # Utility functions
-├── dist/                 # Compiled JavaScript files
-├── package.json          # Project configuration
-└── tsconfig.json         # TypeScript configuration
-```
-
-## Database
-
-Paper metadata is stored in `~/.arxiv-downloader/papers.json`.
-
-## Development
+You can specify a custom port:
 
 ```bash
-# Install development dependencies
-npm install
+adown bibtex-web -p 8080
+```
 
-# Run TypeScript compiler in watch mode
-npm run dev
+### Other Commands
 
-# Run linting
-npm run lint
-
-# Run tests
-npm run test
+```bash
+adown --help  # Show help
+adown pdf 2101.12345  # Open PDF for a paper
+adown source 2101.12345  # Extract LaTeX source
+adown delete 2101.12345  # Delete a paper
+adown clean  # Clean up temporary files
 ```
 
 ## License

@@ -54,6 +54,8 @@ const pdf_1 = __importDefault(require("./commands/pdf"));
 const clean_1 = __importDefault(require("./commands/clean"));
 // @ts-ignore
 const bibtex_1 = __importDefault(require("./commands/bibtex"));
+// @ts-ignore
+const bibtex_web_1 = __importDefault(require("./commands/bibtex-web"));
 // Set up CLI
 const program = new commander_1.Command();
 program
@@ -68,6 +70,7 @@ program
 (0, pdf_1.default)(program);
 (0, clean_1.default)(program);
 (0, bibtex_1.default)(program);
+(0, bibtex_web_1.default)(program);
 // Handle direct URL input (default to download command)
 program
     .arguments('[url]')

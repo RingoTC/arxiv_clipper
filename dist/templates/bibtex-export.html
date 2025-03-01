@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>arXiv BibTeX Exporter</title>
+    <style>
+        :root {
+            --primary-color: #4a69bd;
+            --secondary-color: #6a89cc;
+            --background-color: #f5f6fa;
+            --card-color: #ffffff;
+            --text-color: #2c3e50;
+            --border-color: #dcdde1;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            margin-bottom: 20px;
+        }
+        
+        h1 {
+            color: var(--primary-color);
+            margin-bottom: 10px;
+        }
+        
+        .search-container {
+            display: flex;
+            margin-bottom: 20px;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .search-input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 16px;
+            min-width: 200px;
+        }
+        
+        .tag-filter {
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.2s;
+        }
+        
+        button:hover {
+            background-color: var(--secondary-color);
+        }
+        
+        button:disabled {
+            background-color: var(--border-color);
+            cursor: not-allowed;
+        }
+        
+        .select-all-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .select-all-container label {
+            margin-left: 5px;
+        }
+        
+        .papers-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+        }
+        
+        .paper-card {
+            background-color: var(--card-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .paper-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .paper-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 10px;
+        }
+        
+        .paper-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: var(--primary-color);
+        }
+        
+        .paper-authors {
+            font-size: 14px;
+            color: #7f8c8d;
+            margin-bottom: 10px;
+        }
+        
+        .paper-meta {
+            font-size: 12px;
+            color: #95a5a6;
+            margin-top: 10px;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .paper-tag {
+            display: inline-block;
+            background-color: var(--secondary-color);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            font-size: 18px;
+            color: var(--secondary-color);
+        }
+        
+        .no-results {
+            text-align: center;
+            padding: 20px;
+            font-size: 18px;
+            color: #e74c3c;
+        }
+        
+        .bibtex-preview {
+            background-color: var(--card-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            max-height: 300px;
+            overflow-y: auto;
+            display: none;
+        }
+        
+        @media (max-width: 768px) {
+            .papers-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .search-container {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>arXiv BibTeX Exporter</h1>
+            <p>Search, select, and export BibTeX citations for your arXiv papers</p>
+        </header>
+        
+        <div class="search-container">
+            <input type="text" id="search-input" class="search-input" placeholder="Search by title, author, or abstract...">
+            <select id="tag-filter" class="tag-filter">
+                <option value="">All Tags</option>
+                <!-- Tags will be populated dynamically -->
+            </select>
+        </div>
+        
+        <div class="select-all-container">
+            <input type="checkbox" id="select-all">
+            <label for="select-all">Select All</label>
+        </div>
+        
+        <div class="action-buttons">
+            <button id="export-button" disabled>Export Selected</button>
+            <button id="preview-button" disabled>Preview BibTeX</button>
+            <button id="copy-button" disabled>Copy to Clipboard</button>
+        </div>
+        
+        <div id="bibtex-preview" class="bibtex-preview"></div>
+        
+        <div id="papers-container" class="papers-container">
+            <div class="loading">Loading papers...</div>
+        </div>
+    </div>
+    
+    <script>
+        // State management
+        const state = {
+            papers: [],
+            filteredPapers: [],
+            selectedPapers: new Set(),
+            tags: new Set(),
+            currentFilter: {
+                searchText: '',
+                tag: ''
+            }
+        };
+        
+        // DOM Elements
+        const papersContainer = document.getElementById('papers-container');
+        const searchInput = document.getElementById('search-input');
+        const tagFilter = document.getElementById('tag-filter');
+        const selectAllCheckbox = document.getElementById('select-all');
+        const exportButton = document.getElementById('export-button');
+        const previewButton = document.getElementById('preview-button');
+        const copyButton = document.getElementById('copy-button');
+        const bibtexPreview = document.getElementById('bibtex-preview');
+        
+        // Fetch papers from the server
+        async function fetchPapers() {
+            try {
+                const response = await fetch('/api/papers');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch papers');
+                }
+                
+                state.papers = await response.json();
+                
+                // Extract unique tags
+                state.papers.forEach(paper => {
+                    if (paper.tag) {
+                        state.tags.add(paper.tag);
+                    }
+                });
+                
+                // Populate tag filter
+                populateTagFilter();
+                
+                // Apply initial filtering
+                applyFilters();
+                
+            } catch (error) {
+                console.error('Error fetching papers:', error);
+                papersContainer.innerHTML = `<div class="no-results">Error loading papers: ${error.message}</div>`;
+            }
+        }
+        
+        // Populate tag filter dropdown
+        function populateTagFilter() {
+            const sortedTags = Array.from(state.tags).sort();
+            
+            sortedTags.forEach(tag => {
+                const option = document.createElement('option');
+                option.value = tag;
+                option.textContent = tag;
+                tagFilter.appendChild(option);
+            });
+        }
+        
+        // Apply filters based on search text and tag
+        function applyFilters() {
+            const { searchText, tag } = state.currentFilter;
+            
+            state.filteredPapers = state.papers.filter(paper => {
+                // Filter by tag if selected
+                if (tag && paper.tag !== tag) {
+                    return false;
+                }
+                
+                // Filter by search text if provided
+                if (searchText) {
+                    const searchLower = searchText.toLowerCase();
+                    const titleMatch = paper.title && paper.title.toLowerCase().includes(searchLower);
+                    const abstractMatch = paper.abstract && paper.abstract.toLowerCase().includes(searchLower);
+                    
+                    // Check authors
+                    let authorMatch = false;
+                    if (Array.isArray(paper.authors)) {
+                        authorMatch = paper.authors.some(author => 
+                            author.toLowerCase().includes(searchLower)
+                        );
+                    } else if (typeof paper.authors === 'string') {
+                        authorMatch = paper.authors.toLowerCase().includes(searchLower);
+                    }
+                    
+                    return titleMatch || abstractMatch || authorMatch;
+                }
+                
+                return true;
+            });
+            
+            renderPapers();
+            updateSelectAllState();
+        }
+        
+        // Render papers to the DOM
+        function renderPapers() {
+            if (state.filteredPapers.length === 0) {
+                papersContainer.innerHTML = '<div class="no-results">No papers found matching your criteria</div>';
+                return;
+            }
+            
+            papersContainer.innerHTML = state.filteredPapers.map(paper => {
+                const isSelected = state.selectedPapers.has(paper.id);
+                
+                return `
+                    <div class="paper-card">
+                        <div class="paper-header">
+                            <input type="checkbox" class="paper-checkbox" data-id="${paper.id}" ${isSelected ? 'checked' : ''}>
+                            ${paper.tag ? `<span class="paper-tag">${paper.tag}</span>` : ''}
+                        </div>
+                        <div class="paper-title">${paper.title}</div>
+                        <div class="paper-authors">${Array.isArray(paper.authors) ? paper.authors.join(', ') : paper.authors}</div>
+                        <div class="paper-meta">
+                            <span>Published: ${new Date(paper.publishedDate).toLocaleDateString()}</span>
+                            <span>arXiv ID: ${paper.id}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            // Add event listeners to checkboxes
+            document.querySelectorAll('.paper-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', handlePaperSelection);
+            });
+            
+            updateButtonStates();
+        }
+        
+        // Handle paper selection
+        function handlePaperSelection(event) {
+            const paperId = event.target.dataset.id;
+            
+            if (event.target.checked) {
+                state.selectedPapers.add(paperId);
+            } else {
+                state.selectedPapers.delete(paperId);
+            }
+            
+            updateSelectAllState();
+            updateButtonStates();
+        }
+        
+        // Update select all checkbox state
+        function updateSelectAllState() {
+            if (state.filteredPapers.length === 0) {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.disabled = true;
+            } else {
+                selectAllCheckbox.disabled = false;
+                
+                const allSelected = state.filteredPapers.every(paper => 
+                    state.selectedPapers.has(paper.id)
+                );
+                
+                selectAllCheckbox.checked = allSelected;
+            }
+        }
+        
+        // Update button states based on selection
+        function updateButtonStates() {
+            const hasSelection = state.selectedPapers.size > 0;
+            
+            exportButton.disabled = !hasSelection;
+            previewButton.disabled = !hasSelection;
+            copyButton.disabled = !hasSelection;
+        }
+        
+        // Generate BibTeX for selected papers
+        function generateBibTeX() {
+            const selectedPapers = state.papers.filter(paper => 
+                state.selectedPapers.has(paper.id) && paper.bibtex
+            );
+            
+            if (selectedPapers.length === 0) {
+                return 'No BibTeX entries available for selected papers.';
+            }
+            
+            return selectedPapers.map(paper => paper.bibtex).join('\n\n');
+        }
+        
+        // Preview BibTeX
+        function previewBibTeX() {
+            const bibtex = generateBibTeX();
+            bibtexPreview.textContent = bibtex;
+            bibtexPreview.style.display = 'block';
+        }
+        
+        // Copy BibTeX to clipboard
+        function copyBibTeX() {
+            const bibtex = generateBibTeX();
+            navigator.clipboard.writeText(bibtex)
+                .then(() => {
+                    alert('BibTeX copied to clipboard!');
+                })
+                .catch(err => {
+                    console.error('Failed to copy: ', err);
+                    alert('Failed to copy to clipboard. Please try again.');
+                });
+        }
+        
+        // Export BibTeX as file
+        function exportBibTeX() {
+            const bibtex = generateBibTeX();
+            const blob = new Blob([bibtex], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'arxiv-papers.bib';
+            document.body.appendChild(a);
+            a.click();
+            
+            // Cleanup
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 100);
+        }
+        
+        // Event Listeners
+        searchInput.addEventListener('input', (e) => {
+            state.currentFilter.searchText = e.target.value;
+            applyFilters();
+        });
+        
+        tagFilter.addEventListener('change', (e) => {
+            state.currentFilter.tag = e.target.value;
+            applyFilters();
+        });
+        
+        selectAllCheckbox.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                // Select all filtered papers
+                state.filteredPapers.forEach(paper => {
+                    state.selectedPapers.add(paper.id);
+                });
+            } else {
+                // Deselect all filtered papers
+                state.filteredPapers.forEach(paper => {
+                    state.selectedPapers.delete(paper.id);
+                });
+            }
+            
+            renderPapers();
+            updateButtonStates();
+        });
+        
+        exportButton.addEventListener('click', exportBibTeX);
+        previewButton.addEventListener('click', previewBibTeX);
+        copyButton.addEventListener('click', copyBibTeX);
+        
+        // Initialize
+        fetchPapers();
+    </script>
+</body>
+</html> 

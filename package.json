@@ -1,47 +1,46 @@
 {
   "name": "arxiv-downloader",
   "version": "1.0.0",
-  "description": "A command-line tool for downloading and managing arXiv papers, including both PDF and LaTeX source files.",
-  "main": "dist/index.js",
+  "description": "Tool for downloading and managing arXiv papers",
+  "main": "src/arxiv-downloader.js",
+  "type": "commonjs",
   "bin": {
-    "adown": "./dist/index.js"
+    "adown": "./bin/adown.js"
   },
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
-    "start": "node dist/index.js",
-    "lint": "eslint src --ext .ts",
+    "install": "chmod +x ./bin/adown.js",
+    "start": "node src/cli.js",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "prepare": "npm run build"
+    "build": "tsc",
+    "dev": "tsc -w"
   },
   "keywords": [
     "arxiv",
-    "cli",
-    "downloader",
     "papers",
-    "research",
+    "downloader",
     "pdf",
-    "latex"
+    "tex",
+    "research"
   ],
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "axios": "^1.6.0",
-    "chalk": "^4.1.2",
-    "commander": "^9.5.0",
-    "fs-extra": "^11.1.1",
-    "inquirer": "^8.2.6",
-    "mkdirp": "^3.0.1",
-    "os": "^0.1.2",
-    "path": "^0.12.7"
+    "chalk": "^5.3.0",
+    "commander": "^12.0.0",
+    "fs-extra": "^10.1.0",
+    "inquirer": "^8.2.4",
+    "ora": "^8.0.1",
+    "puppeteer": "^19.7.2",
+    "sqlite3": "^5.1.7",
+    "yargs": "^17.6.2"
   },
   "devDependencies": {
-    "@types/fs-extra": "^11.0.4",
-    "@types/inquirer": "^8.2.6",
-    "@types/node": "^20.11.19",
-    "@typescript-eslint/eslint-plugin": "^7.0.1",
-    "@typescript-eslint/parser": "^7.0.1",
-    "eslint": "^8.56.0",
+    "@types/inquirer": "^9.0.7",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.17.21",
+    "@types/puppeteer": "^5.4.7",
+    "jest": "^29.7.0",
+    "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
   }
 }
