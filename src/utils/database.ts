@@ -1,33 +1,34 @@
-const fs = require('fs-extra');
-const { DATABASE_PATH } = require('./config');
+import fs from 'fs-extra';
+import { DATABASE_PATH } from './config';
+import { Paper } from '../types';
 
 /**
  * Get all papers from the database
- * @returns {Array} Array of paper objects
+ * @returns Array of paper objects
  */
-function getAllPapers() {
+export function getAllPapers(): Paper[] {
   try {
     const data = fs.readJsonSync(DATABASE_PATH);
     return data.papers || [];
   } catch (error) {
-    console.error(`Error reading database: ${error.message}`);
+    console.error(`Error reading database: ${(error as Error).message}`);
     return [];
   }
 }
 
 /**
  * Save papers to the database
- * @param {Array} papers Array of paper objects
+ * @param papers Array of paper objects
  */
-function savePapers(papers) {
+export function savePapers(papers: Paper[]): void {
   fs.writeJsonSync(DATABASE_PATH, { papers }, { spaces: 2 });
 }
 
 /**
  * Add a paper to the database
- * @param {Object} paper Paper object
+ * @param paper Paper object
  */
-function addPaper(paper) {
+export function addPaper(paper: Paper): void {
   const papers = getAllPapers();
   papers.push(paper);
   savePapers(papers);
@@ -35,10 +36,10 @@ function addPaper(paper) {
 
 /**
  * Find papers by search terms
- * @param {Array} searchTerms Array of search terms
- * @returns {Array} Array of matching paper objects
+ * @param searchTerms Array of search terms
+ * @returns Array of matching paper objects
  */
-function findPapers(searchTerms) {
+export function findPapers(searchTerms?: string[]): Paper[] {
   const papers = getAllPapers();
   
   if (!searchTerms || searchTerms.length === 0) {
@@ -58,10 +59,10 @@ function findPapers(searchTerms) {
 
 /**
  * Find papers by tag
- * @param {String} tag Tag to search for
- * @returns {Array} Array of matching paper objects
+ * @param tag Tag to search for
+ * @returns Array of matching paper objects
  */
-function findPapersByTag(tag) {
+export function findPapersByTag(tag?: string): Paper[] {
   const papers = getAllPapers();
   
   if (!tag) {
@@ -73,9 +74,9 @@ function findPapersByTag(tag) {
 
 /**
  * Delete papers by IDs
- * @param {Array} paperIds Array of paper IDs to delete
+ * @param paperIds Array of paper IDs to delete
  */
-function deletePapers(paperIds) {
+export function deletePapers(paperIds?: string[]): void {
   if (!paperIds || paperIds.length === 0) {
     return;
   }
@@ -83,12 +84,4 @@ function deletePapers(paperIds) {
   const papers = getAllPapers();
   const filteredPapers = papers.filter(paper => !paperIds.includes(paper.id));
   savePapers(filteredPapers);
-}
-
-module.exports = {
-  getAllPapers,
-  addPaper,
-  findPapers,
-  findPapersByTag,
-  deletePapers
-}; 
+} 

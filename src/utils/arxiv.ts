@@ -1,15 +1,15 @@
-const axios = require('axios');
-const fs = require('fs-extra');
-const path = require('path');
-const { PAPERS_DIR } = require('./config');
-const mkdirp = require('mkdirp');
+import axios from 'axios';
+import fs from 'fs-extra';
+import path from 'path';
+import { PAPERS_DIR } from './config';
+import { Paper } from '../types';
 
 /**
  * Extract arXiv ID from URL or ID string
- * @param {String} input arXiv URL or ID
- * @returns {String} arXiv ID
+ * @param input arXiv URL or ID
+ * @returns arXiv ID
  */
-function extractArxivId(input) {
+export function extractArxivId(input: string): string {
   // If it's already an ID (e.g., 2007.12324)
   if (/^\d+\.\d+$/.test(input)) {
     return input;
@@ -32,10 +32,10 @@ function extractArxivId(input) {
 
 /**
  * Get paper metadata from arXiv API
- * @param {String} arxivId arXiv ID
- * @returns {Object} Paper metadata
+ * @param arxivId arXiv ID
+ * @returns Paper metadata
  */
-async function getPaperMetadata(arxivId) {
+export async function getPaperMetadata(arxivId: string): Promise<Paper> {
   const apiUrl = `http://export.arxiv.org/api/query?id_list=${arxivId}`;
   
   try {
@@ -52,15 +52,22 @@ async function getPaperMetadata(arxivId) {
       title = titleMatch ? titleMatch[1].replace('Title:', '').trim() : 'Untitled';
     }
     
-    // Extract authors
+    // Improved author extraction
     const authorMatches = xml.match(/<author>([\s\S]*?)<\/author>/g);
-    const authors = [];
+    const authors: string[] = [];
     
     if (authorMatches) {
-      authorMatches.forEach(authorXml => {
-        const nameMatch = authorXml.match(/<name>(.*?)<\/name>/);
+      authorMatches.forEach((authorXml: string) => {
+        // Try to extract name from <n> tag first (newer format)
+        const nameMatch = authorXml.match(/<n>(.*?)<\/name>/);
         if (nameMatch && nameMatch[1]) {
           authors.push(nameMatch[1].trim());
+        } else {
+          // Try to extract from <n> tag (older format)
+          const nMatch = authorXml.match(/<n>(.*?)<\/n>/);
+          if (nMatch && nMatch[1]) {
+            authors.push(nMatch[1].trim());
+          }
         }
       });
     }
@@ -71,28 +78,54 @@ async function getPaperMetadata(arxivId) {
     
     // Extract published date
     const publishedMatch = xml.match(/<published>(.*?)<\/published>/);
-    const published = publishedMatch ? publishedMatch[1].trim() : '';
+    const publishedDate = publishedMatch ? publishedMatch[1].trim() : '';
+    
+    // Extract updated date
+    const updatedMatch = xml.match(/<updated>(.*?)<\/updated>/);
+    const updatedDate = updatedMatch ? updatedMatch[1].trim() : '';
+    
+    // Extract categories
+    const categoryMatch = xml.match(/<category term="(.*?)"/);
+    const categories: string[] = categoryMatch ? [categoryMatch[1]] : [];
     
     return {
       id: arxivId,
       title,
       authors,
       abstract,
-      published,
+      categories,
+      publishedDate,
+      updatedDate,
       url: `https://arxiv.org/abs/${arxivId}`
     };
   } catch (error) {
-    throw new Error(`Failed to fetch paper metadata: ${error.message}`);
+    throw new Error(`Failed to fetch paper metadata: ${(error as Error).message}`);
+  }
+}
+
+/**
+ * Get BibTeX citation for a paper
+ * @param arxivId arXiv ID
+ * @returns BibTeX citation
+ */
+export async function getBibTeX(arxivId: string): Promise<string> {
+  const bibtexUrl = `https://arxiv.org/bibtex/${arxivId}`;
+  
+  try {
+    const response = await axios.get(bibtexUrl);
+    return response.data;
+  } catch (error) {
+    throw new Error(`Failed to fetch BibTeX: ${(error as Error).message}`);
   }
 }
 
 /**
  * Download paper PDF
- * @param {String} arxivId arXiv ID
- * @param {String} outputDir Output directory
- * @returns {String} Path to downloaded PDF
+ * @param arxivId arXiv ID
+ * @param outputDir Output directory
+ * @returns Path to downloaded PDF
  */
-async function downloadPdf(arxivId, outputDir) {
+export async function downloadPdf(arxivId: string, outputDir: string): Promise<string> {
   const pdfUrl = `https://arxiv.org/pdf/${arxivId}.pdf`;
   const outputPath = path.join(outputDir, 'paper.pdf');
   
@@ -106,22 +139,22 @@ async function downloadPdf(arxivId, outputDir) {
     const writer = fs.createWriteStream(outputPath);
     response.data.pipe(writer);
     
-    return new Promise((resolve, reject) => {
+    return new Promise<string>((resolve, reject) => {
       writer.on('finish', () => resolve(outputPath));
       writer.on('error', reject);
     });
   } catch (error) {
-    throw new Error(`Failed to download PDF: ${error.message}`);
+    throw new Error(`Failed to download PDF: ${(error as Error).message}`);
   }
 }
 
 /**
  * Download paper source files
- * @param {String} arxivId arXiv ID
- * @param {String} outputDir Output directory
- * @returns {String} Path to downloaded source files
+ * @param arxivId arXiv ID
+ * @param outputDir Output directory
+ * @returns Path to downloaded source files
  */
-async function downloadSource(arxivId, outputDir) {
+export async function downloadSource(arxivId: string, outputDir: string): Promise<string> {
   const sourceUrl = `https://arxiv.org/e-print/${arxivId}`;
   const outputPath = path.join(outputDir, 'source.tar.gz');
   
@@ -135,22 +168,22 @@ async function downloadSource(arxivId, outputDir) {
     const writer = fs.createWriteStream(outputPath);
     response.data.pipe(writer);
     
-    return new Promise((resolve, reject) => {
+    return new Promise<string>((resolve, reject) => {
       writer.on('finish', () => resolve(outputPath));
       writer.on('error', reject);
     });
   } catch (error) {
-    throw new Error(`Failed to download source files: ${error.message}`);
+    throw new Error(`Failed to download source files: ${(error as Error).message}`);
   }
 }
 
 /**
  * Create paper directory
- * @param {Object} paper Paper metadata
- * @param {String} tag Tag for organizing papers
- * @returns {String} Path to paper directory
+ * @param paper Paper metadata
+ * @param tag Tag for organizing papers
+ * @returns Path to paper directory
  */
-function createPaperDirectory(paper, tag = 'default') {
+export function createPaperDirectory(paper: Paper, tag = 'default'): string {
   // Sanitize title for use as directory name
   const sanitizedTitle = (paper.title || 'Untitled')
     .replace(/[/\\?%*:|"<>]/g, '-')
@@ -159,18 +192,27 @@ function createPaperDirectory(paper, tag = 'default') {
   
   // Ensure tag directory exists
   const tagDir = path.join(PAPERS_DIR, tag);
-  mkdirp.sync(tagDir);
+  fs.ensureDirSync(tagDir);
   
   const paperDir = path.join(tagDir, sanitizedTitle);
-  mkdirp.sync(paperDir);
+  fs.ensureDirSync(paperDir);
   
   return paperDir;
 }
 
-module.exports = {
-  extractArxivId,
-  getPaperMetadata,
-  downloadPdf,
-  downloadSource,
-  createPaperDirectory
-}; 
+/**
+ * Save BibTeX to file
+ * @param bibtex BibTeX content
+ * @param outputDir Output directory
+ * @returns Path to saved BibTeX file
+ */
+export async function saveBibTeX(bibtex: string, outputDir: string): Promise<string> {
+  const outputPath = path.join(outputDir, 'citation.bib');
+  
+  try {
+    await fs.writeFile(outputPath, bibtex);
+    return outputPath;
+  } catch (error) {
+    throw new Error(`Failed to save BibTeX: ${(error as Error).message}`);
+  }
+} 
