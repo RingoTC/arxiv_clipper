@@ -4,7 +4,6 @@ const paperTagInput = document.getElementById('paper-tag');
 const paperGithubInput = document.getElementById('paper-github');
 const downloadTagButtons = document.getElementById('download-tag-buttons');
 const downloadButton = document.getElementById('download-button');
-const paperTagSelect = document.getElementById('paper-tag-select');
 
 // 添加按钮状态样式
 const downloadButtonStyles = document.createElement('style');
@@ -42,6 +41,51 @@ downloadButtonStyles.textContent = `
     
     .button-success {
         background-color: var(--success-color);
+    }
+    
+    .tag-buttons-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 15px;
+    }
+    
+    .tag-button {
+        display: inline-flex;
+        align-items: center;
+        background-color: var(--background-color);
+        color: var(--text-color);
+        border: 1px solid var(--border-color);
+        padding: 8px 15px;
+        border-radius: 20px;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.2s;
+        user-select: none;
+    }
+    
+    .tag-button:hover {
+        background-color: var(--secondary-color);
+        color: white;
+        transform: translateY(-2px);
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    
+    .tag-button.selected {
+        background-color: var(--primary-color);
+        color: white;
+        border-color: var(--primary-color);
+        font-weight: 500;
+    }
+    
+    .tag-button.new-tag {
+        background-color: var(--success-color);
+        color: white;
+        border-color: var(--success-color);
+    }
+    
+    .tag-button.new-tag i {
+        margin-right: 5px;
     }
     
     .new-tag-container {
@@ -89,58 +133,39 @@ document.head.appendChild(downloadButtonStyles);
 
 // Populate tag selector for download page
 function populateTagSelector() {
-    // Clear existing options (except the first one)
-    while (paperTagSelect.options.length > 1) {
-        paperTagSelect.remove(1);
-    }
+    // Clear existing buttons
+    downloadTagButtons.innerHTML = '';
     
-    // Add default tag option if not already present
-    if (paperTagSelect.options.length === 1) {
-        const defaultOption = document.createElement('option');
-        defaultOption.value = 'default';
-        defaultOption.textContent = 'default';
-        paperTagSelect.appendChild(defaultOption);
-    }
-    
-    // Add existing tags from papers
+    // Add existing tags as buttons
     if (state && state.tags) {
         const sortedTags = Array.from(state.tags).sort();
         
         sortedTags.forEach(tag => {
-            if (tag !== 'default') {
-                const option = document.createElement('option');
-                option.value = tag;
-                option.textContent = tag;
-                paperTagSelect.appendChild(option);
-            }
+            const tagButton = document.createElement('span');
+            tagButton.className = 'tag-button' + (paperTagInput.value === tag ? ' selected' : '');
+            tagButton.textContent = tag;
+            tagButton.addEventListener('click', () => {
+                // Deselect all other buttons
+                downloadTagButtons.querySelectorAll('.tag-button').forEach(btn => {
+                    btn.classList.remove('selected');
+                });
+                
+                // Select this button
+                tagButton.classList.add('selected');
+                
+                // Update hidden input
+                paperTagInput.value = tag;
+            });
+            downloadTagButtons.appendChild(tagButton);
         });
     }
     
-    // Add option for creating a new tag
-    const newTagOption = document.createElement('option');
-    newTagOption.value = 'new';
-    newTagOption.textContent = '+ Create new tag';
-    paperTagSelect.appendChild(newTagOption);
-    
-    // Update tag buttons display
-    updateTagButtonsDisplay();
-    
-    // Add event listener to select
-    paperTagSelect.addEventListener('change', handleTagSelectChange);
-}
-
-// Handle tag select change
-function handleTagSelectChange() {
-    const selectedValue = paperTagSelect.value;
-    
-    if (selectedValue === 'new') {
-        // Show input for new tag
-        showNewTagInput();
-    } else {
-        // Update hidden input and tag buttons
-        paperTagInput.value = selectedValue;
-        updateTagButtonsDisplay();
-    }
+    // Add "Create new tag" button
+    const newTagButton = document.createElement('span');
+    newTagButton.className = 'tag-button new-tag';
+    newTagButton.innerHTML = '<i class="fas fa-plus"></i> New Tag';
+    newTagButton.addEventListener('click', showNewTagInput);
+    downloadTagButtons.appendChild(newTagButton);
 }
 
 // Show input for creating a new tag
@@ -200,35 +225,27 @@ function showNewTagInput() {
                 state.tags.add(newTagName);
             }
             
-            // Add to select dropdown
-            const option = document.createElement('option');
-            option.value = newTagName;
-            option.textContent = newTagName;
+            // Refresh the tag selector with the latest tags
+            populateTagSelector();
             
-            // Insert before the "Create new tag" option
-            paperTagSelect.insertBefore(option, paperTagSelect.lastChild);
-            
-            // Select the new tag
-            paperTagSelect.value = newTagName;
-            paperTagInput.value = newTagName;
-            
-            // Update tag buttons
-            updateTagButtonsDisplay();
+            // Select the new tag by finding and clicking it
+            const newTagButton = Array.from(downloadTagButtons.querySelectorAll('.tag-button')).find(
+                btn => btn.textContent === newTagName
+            );
+            if (newTagButton) {
+                newTagButton.click();
+            } else {
+                // Fallback: set the value directly
+                paperTagInput.value = newTagName;
+            }
             
             showToast('Success', `Tag "${newTagName}" created`, 'success');
         }
     }
     
     function handleCancel() {
-        // Reset select to previous value
-        if (paperTagInput.value) {
-            paperTagSelect.value = paperTagInput.value;
-        } else {
-            paperTagSelect.selectedIndex = 0;
-        }
-        
-        // Update tag buttons
-        updateTagButtonsDisplay();
+        // Refresh tag buttons
+        populateTagSelector();
     }
     
     addButton.addEventListener('click', handleAddTag);
@@ -240,22 +257,6 @@ function showNewTagInput() {
             handleCancel();
         }
     });
-}
-
-// Update tag buttons display based on selected tag
-function updateTagButtonsDisplay() {
-    // Clear existing buttons
-    downloadTagButtons.innerHTML = '';
-    
-    const selectedTag = paperTagInput.value || paperTagSelect.value;
-    
-    if (selectedTag && selectedTag !== 'new') {
-        // Show the selected tag as a button
-        const tagButton = document.createElement('span');
-        tagButton.className = 'tag-button selected';
-        tagButton.textContent = selectedTag;
-        downloadTagButtons.appendChild(tagButton);
-    }
 }
 
 // Download a paper
@@ -274,7 +275,7 @@ async function downloadPaper() {
     }
     
     // Get tag
-    const tag = paperTagInput.value.trim() || paperTagSelect.value || 'default';
+    const tag = paperTagInput.value.trim() || 'default';
     
     // Get GitHub URL (optional)
     const githubUrl = paperGithubInput.value.trim();
@@ -312,10 +313,14 @@ async function downloadPaper() {
         downloadButton.innerHTML = '<i class="fas fa-check"></i> Downloaded';
         showToast('Success', `Paper "${data.title}" downloaded successfully`, 'success');
         
+        // Refresh tag selector to ensure it has the latest tags
+        populateTagSelector();
+        
         // Reset form after a delay
         setTimeout(() => {
             paperUrlInput.value = '';
             paperGithubInput.value = '';
+            paperTagInput.value = ''; // Clear the selected tag
             downloadButton.disabled = false;
             downloadButton.classList.remove('button-success');
             downloadButton.innerHTML = originalText;
@@ -324,6 +329,9 @@ async function downloadPaper() {
             if (document.getElementById('list-tab').classList.contains('active')) {
                 fetchPapers();
             }
+            
+            // Refresh tag buttons
+            populateTagSelector();
         }, 3000);
     } catch (error) {
         console.error('Download error:', error);
@@ -374,4 +382,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Add download button event listener
     downloadButton.addEventListener('click', downloadPaper);
+    
+    // Add event listener to refresh tag selector periodically
+    setInterval(populateTagSelector, 5000); // Refresh every 5 seconds
 }); 

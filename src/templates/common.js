@@ -29,6 +29,11 @@ tabLinks.forEach(link => {
         const tabId = link.getAttribute('data-tab');
         document.getElementById(tabId).classList.add('active');
         state.activeTab = tabId;
+        
+        // If switching to download tab, update tag selector
+        if (tabId === 'download-tab' && typeof populateTagSelector === 'function') {
+            populateTagSelector();
+        }
     });
 });
 
