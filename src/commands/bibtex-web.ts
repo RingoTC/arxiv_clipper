@@ -483,7 +483,7 @@ const webCommand: CommandFunction = (program: Command) => {
             if (req.url === '/api/open-kb' && req.method === 'GET') {
               try {
                 // Open knowledge base directory
-                open(KB_DIR).catch(console.error);
+                open(PAPERS_DIR).catch(console.error);
                 
                 res.statusCode = 200;
                 res.setHeader('Content-Type', 'application/json');

@@ -48,7 +48,7 @@ export async function openPaperDirectory(id: string, options: { source?: boolean
 // Open the entire knowledge base
 export async function openKnowledgeBase() {
   try {
-    const kbPath = path.join(homedir(), '.arxiv-downloader', 'papers');
+    const kbPath = path.join(homedir(), 'Development', 'arxiv');
     console.log(chalk.green(`Opening knowledge base at: ${kbPath}`));
     await open(kbPath);
   } catch (error) {

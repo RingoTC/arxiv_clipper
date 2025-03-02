@@ -1,3 +1,5 @@
 You are an expert in Node.js and JavaScript.
 
 Do remember that after modify this source code you need to do "npm run build" for updating.
+
+When you need to devlop a new function you need to do unit test also. And when you finish your work, you need to run npm run test too.

@@ -414,7 +414,7 @@ const webCommand = (program) => {
                     if (req.url === '/api/open-kb' && req.method === 'GET') {
                         try {
                             // Open knowledge base directory
-                            (0, open_1.default)(KB_DIR).catch(console.error);
+                            (0, open_1.default)(config_1.PAPERS_DIR).catch(console.error);
                             res.statusCode = 200;
                             res.setHeader('Content-Type', 'application/json');
                             res.end(safeJsonStringify({ success: true }));
