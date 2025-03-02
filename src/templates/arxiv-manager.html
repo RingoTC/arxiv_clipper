@@ -163,23 +163,61 @@
             background-color: #2980b9;
         }
         
+        /* 新的弹出式通知样式 */
+        #alert-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            max-width: 350px;
+            width: auto;
+        }
+        
         .alert {
             padding: 15px;
             border-radius: 4px;
-            margin-bottom: 20px;
-            display: none;
+            margin-bottom: 10px;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            animation: slideIn 0.3s ease-out forwards;
+            opacity: 0;
+            transform: translateX(50px);
+        }
+        
+        @keyframes slideIn {
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        @keyframes fadeOut {
+            from {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(50px);
+            }
         }
         
         .alert-success {
             background-color: #d5f5e3;
             color: #27ae60;
-            border: 1px solid #2ecc71;
+            border-left: 4px solid #2ecc71;
         }
         
         .alert-error {
             background-color: #fadbd8;
             color: #c0392b;
-            border: 1px solid #e74c3c;
+            border-left: 4px solid #e74c3c;
+        }
+        
+        .alert-icon {
+            margin-right: 10px;
+            font-size: 18px;
         }
         
         .loading {
@@ -229,6 +267,51 @@
             nav li {
                 margin: 5px;
             }
+            
+            #alert-container {
+                left: 20px;
+                right: 20px;
+                max-width: none;
+            }
+        }
+        
+        .tag-buttons-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        
+        .tag-button {
+            display: inline-block;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .tag-button:hover {
+            background-color: var(--secondary-color);
+            color: white;
+        }
+        
+        .tag-button.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+        
+        .tag-button.selected {
+            background-color: var(--primary-color);
+            color: white;
+        }
+        
+        .tag-button.new-tag {
+            background-color: var(--success-color);
+            color: white;
         }
     </style>
 </head>
@@ -246,8 +329,6 @@
     </header>
     
     <div class="container">
-        <div id="alert-container"></div>
-        
         <!-- List Tab -->
         <div id="list-tab" class="tab-content active">
             <div class="card">
@@ -258,21 +339,20 @@
                         <input type="text" id="search-input" placeholder="Search by title, author, or abstract...">
                     </div>
                     <div class="form-group">
-                        <label for="tag-filter">Filter by Tag</label>
-                        <select id="tag-filter">
-                            <option value="">All Tags</option>
+                        <label>Filter by Tags</label>
+                        <div id="tag-filter-buttons" class="tag-buttons-container">
                             <!-- Tags will be populated dynamically -->
-                        </select>
+                        </div>
                     </div>
                 </div>
                 
                 <div class="select-all-container">
                     <input type="checkbox" id="select-all">
                     <label for="select-all">Select All</label>
-                    <button id="delete-selected" class="button-danger" disabled>Delete Selected</button>
                     
-                    <!-- BibTeX buttons integrated into list page -->
-                    <div class="action-buttons" style="display: inline-block; margin-left: 15px;">
+                    <!-- BibTeX buttons and delete button integrated into list page -->
+                    <div class="action-buttons">
+                        <button id="delete-selected" class="button-danger" disabled><i class="fas fa-trash"></i> Delete Selected</button>
                         <button id="preview-button" class="button-info" disabled><i class="fas fa-eye"></i> Preview BibTeX</button>
                         <button id="copy-button" class="button-info" disabled><i class="fas fa-copy"></i> Copy BibTeX</button>
                         <button id="export-button" class="button-info" disabled><i class="fas fa-download"></i> Export BibTeX</button>
@@ -297,31 +377,38 @@
                     <input type="url" id="paper-url" placeholder="https://arxiv.org/abs/2101.12345">
                 </div>
                 <div class="form-group">
-                    <label for="paper-tag">Tag (optional)</label>
-                    <input type="text" id="paper-tag" placeholder="e.g., machine-learning">
+                    <label>Tag</label>
+                    <div id="download-tag-buttons" class="tag-buttons-container">
+                        <!-- Tags will be populated dynamically -->
+                    </div>
+                    <input type="hidden" id="paper-tag" value="">
                 </div>
                 <button id="download-button">Download Paper</button>
-                <div id="download-status" class="alert"></div>
             </div>
         </div>
     </div>
+    
+    <!-- Alert Container for Notifications -->
+    <div id="alert-container"></div>
     
     <!-- Paper Template -->
     <template id="paper-template">
         <div class="paper-card">
             <div class="paper-header">
                 <input type="checkbox" class="paper-checkbox">
-                <span class="paper-tag"></span>
             </div>
-            <div class="paper-title"></div>
-            <div class="paper-authors"></div>
-            <div class="paper-meta">
-                <span class="paper-date"></span>
-                <span class="paper-id"></span>
+            <div class="paper-content">
+                <div class="paper-title"></div>
+                <div class="paper-authors"></div>
+                <div class="paper-meta">
+                    <span class="paper-date"></span>
+                    <span class="paper-id"></span>
+                </div>
             </div>
             <div class="paper-actions">
-                <button class="view-pdf-button button-info"><i class="fas fa-file-pdf"></i> View PDF</button>
-                <button class="view-source-button button-info"><i class="fas fa-code"></i> View Source</button>
+                <span class="paper-tag"></span>
+                <button class="view-pdf-button button-info"><i class="fas fa-file-pdf"></i> PDF</button>
+                <button class="view-source-button button-info"><i class="fas fa-code"></i> Source</button>
             </div>
         </div>
     </template>
@@ -366,16 +453,30 @@
             const container = document.getElementById(containerId);
             const alert = document.createElement('div');
             alert.className = `alert alert-${type}`;
-            alert.textContent = message;
             
-            // Clear previous alerts
-            container.innerHTML = '';
+            // 添加图标
+            const icon = document.createElement('i');
+            if (type === 'success') {
+                icon.className = 'fas fa-check-circle alert-icon';
+            } else {
+                icon.className = 'fas fa-exclamation-circle alert-icon';
+            }
+            alert.appendChild(icon);
+            
+            // 添加消息文本
+            const messageText = document.createElement('span');
+            messageText.textContent = message;
+            alert.appendChild(messageText);
+            
+            // 添加到容器
             container.appendChild(alert);
-            alert.style.display = 'block';
             
-            // Auto-hide after 5 seconds
+            // 自动隐藏
             setTimeout(() => {
-                alert.style.display = 'none';
+                alert.style.animation = 'fadeOut 0.3s forwards';
+                setTimeout(() => {
+                    container.removeChild(alert);
+                }, 300);
             }, 5000);
         }
     </script>

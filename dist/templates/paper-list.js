@@ -1,7 +1,7 @@
 // DOM Elements
 const papersContainer = document.getElementById('papers-container');
 const searchInput = document.getElementById('search-input');
-const tagFilter = document.getElementById('tag-filter');
+const tagFilterButtons = document.getElementById('tag-filter-buttons');
 const selectAllCheckbox = document.getElementById('select-all');
 const deleteSelectedButton = document.getElementById('delete-selected');
 // Add BibTeX button references
@@ -13,51 +13,64 @@ const exportBibtexButton = document.getElementById('export-button');
 const paperListStyles = document.createElement('style');
 paperListStyles.textContent = `
     .papers-container {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-        gap: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
         margin-top: 20px;
     }
     
     .paper-card {
         background-color: var(--card-color);
         border: 1px solid var(--border-color);
-        border-radius: 8px;
-        padding: 15px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-        transition: transform 0.2s, box-shadow 0.2s;
+        border-radius: 4px;
+        padding: 12px 15px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        transition: background-color 0.2s;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 15px;
     }
     
     .paper-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        background-color: #f8f9fa;
     }
     
     .paper-header {
         display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: 10px;
+        align-items: center;
+        min-width: 30px;
+    }
+    
+    .paper-content {
+        flex: 1;
+        min-width: 0; /* 防止内容溢出 */
     }
     
     .paper-title {
-        font-weight: bold;
+        font-weight: 600;
         margin-bottom: 5px;
         color: var(--primary-color);
+        font-size: 15px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     
     .paper-authors {
-        font-size: 14px;
+        font-size: 13px;
         color: #7f8c8d;
-        margin-bottom: 10px;
+        margin-bottom: 5px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     
     .paper-meta {
         font-size: 12px;
         color: #95a5a6;
-        margin: 10px 0;
         display: flex;
-        justify-content: space-between;
+        gap: 15px;
     }
     
     .paper-tag {
@@ -67,28 +80,89 @@ paperListStyles.textContent = `
         padding: 2px 8px;
         border-radius: 12px;
         font-size: 12px;
+        white-space: nowrap;
+        margin-right: auto;
     }
     
     .paper-actions {
         display: flex;
-        gap: 10px;
-        margin-top: 15px;
+        gap: 8px;
+        margin-left: auto;
+        align-items: center;
     }
     
     .paper-actions button {
-        font-size: 14px;
-        padding: 5px 10px;
+        font-size: 13px;
+        padding: 4px 8px;
+        white-space: nowrap;
     }
     
     .select-all-container {
         display: flex;
         align-items: center;
         margin-top: 20px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
     }
     
     .select-all-container label {
         margin: 0 15px 0 5px;
         display: inline;
+    }
+    
+    /* 统一按钮样式和对齐方式 */
+    .action-buttons {
+        display: inline-flex;
+        gap: 10px;
+        margin-left: auto;
+        vertical-align: middle;
+        flex-wrap: wrap;
+    }
+    
+    .action-buttons button {
+        height: 38px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    #delete-selected {
+        height: 38px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    /* 响应式设计 */
+    @media (max-width: 768px) {
+        .paper-card {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        
+        .paper-header {
+            width: 100%;
+            justify-content: space-between;
+        }
+        
+        .paper-actions {
+            margin-left: 0;
+            width: 100%;
+            justify-content: flex-end;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .paper-tag {
+            margin-right: 0;
+            margin-bottom: 5px;
+        }
+        
+        .action-buttons {
+            margin-left: 0;
+            width: 100%;
+            justify-content: flex-end;
+        }
     }
 `;
 document.head.appendChild(paperListStyles);
@@ -106,14 +180,15 @@ async function fetchPapers() {
         state.papers = await response.json();
         
         // Extract unique tags
+        state.tags.clear();
         state.papers.forEach(paper => {
             if (paper.tag) {
                 state.tags.add(paper.tag);
             }
         });
         
-        // Populate tag filter
-        populateTagFilter();
+        // Populate tag filter buttons
+        populateTagFilterButtons();
         
         // Apply initial filtering
         applyFilters();
@@ -124,30 +199,68 @@ async function fetchPapers() {
     }
 }
 
-// Populate tag filter dropdown
-function populateTagFilter() {
+// Populate tag filter buttons
+function populateTagFilterButtons() {
     const sortedTags = Array.from(state.tags).sort();
     
-    // Clear existing options except the first one
-    while (tagFilter.options.length > 1) {
-        tagFilter.remove(1);
-    }
+    // Clear existing buttons
+    tagFilterButtons.innerHTML = '';
     
+    // Add "All Tags" button
+    const allTagsButton = document.createElement('span');
+    allTagsButton.className = 'tag-button' + (state.currentFilter.tags.length === 0 ? ' active' : '');
+    allTagsButton.textContent = 'All Tags';
+    allTagsButton.dataset.tag = '';
+    allTagsButton.addEventListener('click', () => {
+        // Clear all selected tags
+        state.currentFilter.tags = [];
+        updateTagButtonsState();
+        applyFilters();
+    });
+    tagFilterButtons.appendChild(allTagsButton);
+    
+    // Add tag buttons
     sortedTags.forEach(tag => {
-        const option = document.createElement('option');
-        option.value = tag;
-        option.textContent = tag;
-        tagFilter.appendChild(option);
+        const tagButton = document.createElement('span');
+        tagButton.className = 'tag-button' + (state.currentFilter.tags.includes(tag) ? ' active' : '');
+        tagButton.textContent = tag;
+        tagButton.dataset.tag = tag;
+        tagButton.addEventListener('click', () => {
+            // Toggle tag selection
+            if (state.currentFilter.tags.includes(tag)) {
+                state.currentFilter.tags = state.currentFilter.tags.filter(t => t !== tag);
+            } else {
+                state.currentFilter.tags.push(tag);
+            }
+            updateTagButtonsState();
+            applyFilters();
+        });
+        tagFilterButtons.appendChild(tagButton);
     });
 }
 
-// Apply filters based on search text and tag
+// Update tag buttons state
+function updateTagButtonsState() {
+    // Update "All Tags" button
+    const allTagsButton = tagFilterButtons.querySelector('[data-tag=""]');
+    if (allTagsButton) {
+        allTagsButton.classList.toggle('active', state.currentFilter.tags.length === 0);
+    }
+    
+    // Update individual tag buttons
+    tagFilterButtons.querySelectorAll('.tag-button[data-tag]:not([data-tag=""])').forEach(button => {
+        const tag = button.dataset.tag;
+        button.classList.toggle('active', state.currentFilter.tags.includes(tag));
+    });
+}
+
+// Apply filters based on search text and tags
 function applyFilters() {
-    const { searchText, tag } = state.currentFilter;
+    const { searchText, tags } = state.currentFilter;
     
     state.filteredPapers = state.papers.filter(paper => {
-        // Filter by tag if selected
-        if (tag && paper.tag !== tag) {
+        // Filter by tags if selected
+        if (tags.length > 0 && (!paper.tag || !tags.includes(paper.tag))) {
             return false;
         }
         
@@ -380,11 +493,6 @@ searchInput.addEventListener('input', (e) => {
     applyFilters();
 });
 
-tagFilter.addEventListener('change', (e) => {
-    state.currentFilter.tag = e.target.value;
-    applyFilters();
-});
-
 selectAllCheckbox.addEventListener('change', (e) => {
     if (e.target.checked) {
         // Select all visible papers
@@ -404,16 +512,14 @@ deleteSelectedButton.addEventListener('click', deleteSelectedPapers);
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
+    // Update state to include tags array
+    state.currentFilter.tags = [];
+    
     fetchPapers();
     
     // Event listeners
     searchInput.addEventListener('input', (e) => {
         state.currentFilter.searchText = e.target.value;
-        applyFilters();
-    });
-    
-    tagFilter.addEventListener('change', (e) => {
-        state.currentFilter.tag = e.target.value;
         applyFilters();
     });
     
