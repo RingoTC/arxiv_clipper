@@ -20,6 +20,8 @@ import cleanCommand from './commands/clean';
 import bibtexCommand from './commands/bibtex';
 // @ts-ignore
 import webCommand from './commands/bibtex-web';
+// @ts-ignore
+import openCommand from './commands/open';
 import { CommandOptions } from './types';
 
 // Set up CLI
@@ -38,18 +40,23 @@ pdfCommand(program);
 cleanCommand(program);
 bibtexCommand(program);
 webCommand(program);
+openCommand(program);
 
 // Handle direct URL input (default to download command)
 program
   .arguments('[url]')
   .option('-t, --tag <tag>', 'Tag for organizing papers', 'default')
+  .option('--github <url>', 'GitHub repository URL to download along with the paper')
   .action(async (url?: string, options?: CommandOptions) => {
     if (url && url.includes('arxiv.org')) {
       // If URL is provided, call the download command
       const downloadCmd = program.commands.find(cmd => cmd.name() === 'download');
       if (downloadCmd) {
         // Call the download command directly
-        program.parse(['node', 'script.js', 'download', url, ...(options?.tag ? ['-t', options.tag] : [])]);
+        const args = ['node', 'script.js', 'download', url];
+        if (options?.tag) args.push('-t', options.tag);
+        if (options?.github) args.push('--github', options.github);
+        program.parse(args);
       }
     } else if (!process.argv.slice(2).length || (url && !url.includes('arxiv.org'))) {
       // Show help if no arguments or invalid URL

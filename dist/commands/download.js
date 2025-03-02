@@ -13,52 +13,44 @@ const ora_1 = __importDefault(require("ora"));
 const chalk_1 = __importDefault(require("chalk"));
 const axios_1 = __importDefault(require("axios"));
 const fs_1 = __importDefault(require("fs"));
+const child_process_1 = require("child_process");
+const util_1 = require("util");
+const execAsync = (0, util_1.promisify)(child_process_1.exec);
 async function download(url, options) {
     const spinner = (0, ora_1.default)('Downloading paper...').start();
     try {
-        let arxivId = '';
-        const urlMatch = url.match(/arxiv\.org\/(?:abs|pdf)\/([^\/]+)/i);
-        if (urlMatch && urlMatch[1]) {
-            arxivId = urlMatch[1].split('v')[0];
-        }
-        else {
-            arxivId = url.split('/').pop()?.split('v')[0] || '';
-        }
+        const arxivId = url.split('/').pop()?.replace('v', '') || '';
         if (!arxivId) {
             throw new Error('Invalid arXiv URL');
         }
-        spinner.text = `Downloading paper with ID: ${arxivId}`;
-        const browser = await puppeteer_1.default.launch({
-            headless: 'new',
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
-        });
+        const browser = await puppeteer_1.default.launch({ headless: 'new' });
         const page = await browser.newPage();
-        const downloadPath = (0, path_1.join)((0, os_1.homedir)(), '.arxiv-downloader', 'papers', options.tag);
+        // Configure download path
+        const downloadPath = (0, path_1.join)((0, os_1.homedir)(), 'Development', 'arxiv', options.tag);
         await (0, promises_1.mkdir)(downloadPath, { recursive: true });
-        await page.goto(`https://arxiv.org/abs/${arxivId}`, {
-            waitUntil: 'networkidle0',
-            timeout: 60000
-        });
-        spinner.text = 'Extracting paper metadata...';
+        await page.goto(url, { waitUntil: 'networkidle0' });
+        // Get paper title
         const titleElement = await page.waitForSelector('h1.title');
         const title = await titleElement?.evaluate(el => el.textContent?.replace('Title:', '').trim()) || '';
+        // Get authors
         const authorsElement = await page.waitForSelector('div.authors');
         const authors = await authorsElement?.evaluate(el => {
             const authorsText = el.textContent?.replace('Authors:', '').trim() || '';
             return authorsText.split(',').map(author => author.trim());
         }) || [];
+        // Get abstract
         const abstractElement = await page.waitForSelector('blockquote.abstract');
         const abstract = await abstractElement?.evaluate(el => el.textContent?.replace('Abstract:', '').trim()) || '';
-        const safeTitle = title.replace(/[\/\\:*?"<>|]/g, '_');
-        const paperDir = (0, path_1.join)(downloadPath, safeTitle);
+        // Create paper directory
+        const paperDir = (0, path_1.join)(downloadPath, title);
         await (0, promises_1.mkdir)(paperDir, { recursive: true });
-        spinner.text = 'Downloading PDF...';
+        // Get PDF URL
         const pdfUrl = `https://arxiv.org/pdf/${arxivId}.pdf`;
+        // Download PDF using axios
         const pdfResponse = await (0, axios_1.default)({
             method: 'get',
             url: pdfUrl,
-            responseType: 'stream',
-            timeout: 30000
+            responseType: 'stream'
         });
         const pdfPath = (0, path_1.join)(paperDir, `${arxivId}.pdf`);
         const pdfWriter = fs_1.default.createWriteStream(pdfPath);
@@ -67,13 +59,13 @@ async function download(url, options) {
             pdfWriter.on('finish', () => resolve());
             pdfWriter.on('error', (err) => reject(err));
         });
-        spinner.text = 'Downloading source...';
+        // Get source URL
         const sourceUrl = `https://arxiv.org/e-print/${arxivId}`;
+        // Download source using axios
         const sourceResponse = await (0, axios_1.default)({
             method: 'get',
             url: sourceUrl,
-            responseType: 'stream',
-            timeout: 30000
+            responseType: 'stream'
         });
         const sourcePath = (0, path_1.join)(paperDir, `${arxivId}.tar.gz`);
         const sourceWriter = fs_1.default.createWriteStream(sourcePath);
@@ -82,8 +74,29 @@ async function download(url, options) {
             sourceWriter.on('finish', () => resolve());
             sourceWriter.on('error', (err) => reject(err));
         });
+        // Handle GitHub repository download if provided
+        let githubUrl;
+        let localGithubPath;
+        if (options.github) {
+            githubUrl = options.github;
+            spinner.text = 'Downloading GitHub repository...';
+            // Create GitHub directory
+            const githubDir = (0, path_1.join)(paperDir, 'github');
+            await (0, promises_1.mkdir)(githubDir, { recursive: true });
+            // Clone the repository
+            try {
+                await execAsync(`git clone ${githubUrl} ${githubDir}`);
+                localGithubPath = githubDir;
+                spinner.succeed(chalk_1.default.green(`Successfully cloned GitHub repository: ${githubUrl}`));
+                spinner.start('Finalizing paper download...');
+            }
+            catch (error) {
+                console.error(chalk_1.default.yellow(`Warning: Failed to clone GitHub repository: ${githubUrl}`));
+                console.error(error);
+            }
+        }
         await browser.close();
-        spinner.text = 'Saving to database...';
+        // Save to database
         await Paper_1.paperDB.add({
             id: arxivId,
             title,
@@ -96,18 +109,18 @@ async function download(url, options) {
             tag: options.tag,
             pdfUrl,
             sourceUrl,
+            githubUrl,
             localPdfPath: pdfPath,
             localSourcePath: sourcePath,
+            localGithubPath,
             dateAdded: new Date().toISOString(),
             arxivId
         });
         spinner.succeed(chalk_1.default.green(`Successfully downloaded paper: ${title}`));
-        return { success: true, title, id: arxivId };
     }
     catch (error) {
         spinner.fail(chalk_1.default.red('Failed to download paper'));
         console.error(error);
-        throw error;
     }
 }
 const downloadCommand = (program) => {
@@ -115,8 +128,9 @@ const downloadCommand = (program) => {
         .command('download <url>')
         .description('Download a paper from arXiv')
         .option('-t, --tag <tag>', 'Tag for organizing papers', 'default')
+        .option('--github <url>', 'GitHub repository URL to download along with the paper')
         .action((url, options) => {
-        download(url, { tag: options.tag });
+        download(url, { tag: options.tag, github: options.github });
     });
 };
 exports.default = downloadCommand;

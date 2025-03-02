@@ -24,6 +24,8 @@ db.serialize(() => {
       sourceUrl TEXT,
       localPdfPath TEXT,
       localSourcePath TEXT,
+      githubUrl TEXT,
+      localGithubPath TEXT,
       tag TEXT,
       dateAdded TEXT
     )
@@ -36,8 +38,8 @@ export const paperDB = {
   add: (paper: Paper): Promise<void> => {
     return new Promise((resolve, reject) => {
       const stmt = db.prepare(`
-        INSERT OR REPLACE INTO papers (id, title, authors, abstract, pdfUrl, sourceUrl, localPdfPath, localSourcePath, tag, dateAdded)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT OR REPLACE INTO papers (id, title, authors, abstract, pdfUrl, sourceUrl, localPdfPath, localSourcePath, githubUrl, localGithubPath, tag, dateAdded)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       
       stmt.run(
@@ -49,6 +51,8 @@ export const paperDB = {
         paper.sourceUrl,
         paper.localPdfPath || paper.pdfPath,
         paper.localSourcePath || paper.sourcePath,
+        paper.githubUrl,
+        paper.localGithubPath,
         paper.tag,
         paper.dateAdded || new Date().toISOString(),
         (err: Error | null) => {

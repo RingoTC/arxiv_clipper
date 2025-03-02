@@ -12,6 +12,7 @@ const download_1 = require("./download");
 const child_process_1 = require("child_process");
 const util_1 = require("util");
 const Paper_1 = require("../models/Paper");
+const open_2 = require("./open");
 const execAsync = (0, util_1.promisify)(child_process_1.exec);
 const webCommand = (program) => {
     program
@@ -26,7 +27,7 @@ const webCommand = (program) => {
             const server = http_1.default.createServer(async (req, res) => {
                 // Set CORS headers for all responses
                 res.setHeader('Access-Control-Allow-Origin', '*');
-                res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, DELETE');
+                res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, DELETE, PATCH');
                 res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
                 // Handle OPTIONS requests (for CORS preflight)
                 if (req.method === 'OPTIONS') {
@@ -44,14 +45,13 @@ const webCommand = (program) => {
                             res.end(JSON.stringify(papers));
                         }
                         catch (error) {
-                            console.error(`Error fetching papers: ${error.message}`);
                             res.statusCode = 500;
                             res.setHeader('Content-Type', 'application/json');
-                            res.end(JSON.stringify({ error: 'Failed to fetch papers' }));
+                            res.end(JSON.stringify({ error: error.message }));
                         }
                         return;
                     }
-                    // Download a paper
+                    // Download paper
                     if (req.url === '/api/papers' && req.method === 'POST') {
                         let body = '';
                         req.on('data', chunk => {
@@ -59,14 +59,14 @@ const webCommand = (program) => {
                         });
                         req.on('end', async () => {
                             try {
-                                const { url, tag } = JSON.parse(body);
+                                const { url, tag, githubUrl } = JSON.parse(body);
                                 if (!url) {
                                     res.statusCode = 400;
                                     res.end(JSON.stringify({ error: 'URL is required' }));
                                     return;
                                 }
-                                // Use the download function from download.ts
-                                await (0, download_1.download)(url, { tag: tag || 'default' });
+                                // Download paper
+                                await (0, download_1.download)(url, { tag: tag || 'default', github: githubUrl });
                                 res.statusCode = 200;
                                 res.setHeader('Content-Type', 'application/json');
                                 res.end(JSON.stringify({ success: true }));
@@ -79,8 +79,83 @@ const webCommand = (program) => {
                         });
                         return;
                     }
+                    // Update paper
+                    if (req.url?.startsWith('/api/papers/') && req.method === 'PATCH') {
+                        const paperId = req.url.replace('/api/papers/', '');
+                        let body = '';
+                        req.on('data', chunk => {
+                            body += chunk.toString();
+                        });
+                        req.on('end', async () => {
+                            try {
+                                const { githubUrl } = JSON.parse(body);
+                                // Get paper
+                                const papers = await Paper_1.paperDB.searchPapers(paperId);
+                                if (papers.length === 0) {
+                                    res.statusCode = 404;
+                                    res.setHeader('Content-Type', 'application/json');
+                                    res.end(JSON.stringify({ error: 'Paper not found' }));
+                                    return;
+                                }
+                                const paper = papers[0];
+                                // Update paper
+                                paper.githubUrl = githubUrl;
+                                // Save to database
+                                await Paper_1.paperDB.add(paper);
+                                res.statusCode = 200;
+                                res.setHeader('Content-Type', 'application/json');
+                                res.end(JSON.stringify({ success: true }));
+                            }
+                            catch (error) {
+                                res.statusCode = 500;
+                                res.setHeader('Content-Type', 'application/json');
+                                res.end(JSON.stringify({ error: error.message }));
+                            }
+                        });
+                        return;
+                    }
+                    // Clone GitHub repository
+                    if (req.url?.startsWith('/api/github/clone/') && req.method === 'POST') {
+                        const paperId = req.url.replace('/api/github/clone/', '');
+                        try {
+                            // Get paper
+                            const papers = await Paper_1.paperDB.searchPapers(paperId);
+                            if (papers.length === 0) {
+                                res.statusCode = 404;
+                                res.setHeader('Content-Type', 'application/json');
+                                res.end(JSON.stringify({ error: 'Paper not found' }));
+                                return;
+                            }
+                            const paper = papers[0];
+                            if (!paper.githubUrl) {
+                                res.statusCode = 400;
+                                res.setHeader('Content-Type', 'application/json');
+                                res.end(JSON.stringify({ error: 'Paper does not have a GitHub URL' }));
+                                return;
+                            }
+                            // Create GitHub directory
+                            const paperDir = path_1.default.dirname(paper.localPdfPath || '');
+                            const githubDir = path_1.default.join(paperDir, 'github');
+                            await fs_extra_1.default.ensureDir(githubDir);
+                            // Clone repository
+                            await execAsync(`git clone ${paper.githubUrl} ${githubDir}`);
+                            // Update paper
+                            paper.localGithubPath = githubDir;
+                            // Save to database
+                            await Paper_1.paperDB.add(paper);
+                            res.statusCode = 200;
+                            res.setHeader('Content-Type', 'application/json');
+                            res.end(JSON.stringify({ success: true, localGithubPath: githubDir }));
+                        }
+                        catch (error) {
+                            res.statusCode = 500;
+                            res.setHeader('Content-Type', 'application/json');
+                            res.end(JSON.stringify({ error: error.message }));
+                        }
+                        return;
+                    }
                     // Delete papers
-                    if (req.url === '/api/papers' && req.method === 'DELETE') {
+                    if (req.url === '/api/papers/delete' && req.method === 'POST') {
                         let body = '';
                         req.on('data', chunk => {
                             body += chunk.toString();
@@ -167,10 +242,57 @@ const webCommand = (program) => {
                         }
                         return;
                     }
+                    // Open directory
+                    if (req.url?.startsWith('/api/open/') && req.method === 'GET') {
+                        const paperId = req.url.replace('/api/open/', '');
+                        const type = new URL(`http://localhost${req.url}`).searchParams.get('type') || 'parent';
+                        try {
+                            await (0, open_2.openPaperDirectory)(paperId, { type: type });
+                            res.statusCode = 200;
+                            res.setHeader('Content-Type', 'application/json');
+                            res.end(JSON.stringify({ success: true }));
+                        }
+                        catch (error) {
+                            res.statusCode = 500;
+                            res.setHeader('Content-Type', 'application/json');
+                            res.end(JSON.stringify({ error: error.message }));
+                        }
+                        return;
+                    }
+                    // Open knowledge base
+                    if (req.url === '/api/open-kb' && req.method === 'GET') {
+                        try {
+                            await (0, open_2.openKnowledgeBase)();
+                            res.statusCode = 200;
+                            res.setHeader('Content-Type', 'application/json');
+                            res.end(JSON.stringify({ success: true }));
+                        }
+                        catch (error) {
+                            res.statusCode = 500;
+                            res.setHeader('Content-Type', 'application/json');
+                            res.end(JSON.stringify({ error: error.message }));
+                        }
+                        return;
+                    }
                     // 404 for unknown API endpoints
                     res.statusCode = 404;
                     res.setHeader('Content-Type', 'application/json');
                     res.end(JSON.stringify({ error: 'API endpoint not found' }));
+                    return;
+                }
+                // Serve CSS files
+                if (req.url?.endsWith('.css')) {
+                    const cssPath = path_1.default.join(__dirname, '../templates', path_1.default.basename(req.url));
+                    try {
+                        const css = fs_extra_1.default.readFileSync(cssPath, 'utf8');
+                        res.setHeader('Content-Type', 'text/css');
+                        res.end(css);
+                    }
+                    catch (error) {
+                        console.error(`Error reading CSS file: ${error.message}`);
+                        res.statusCode = 404;
+                        res.end('File not found');
+                    }
                     return;
                 }
                 // Serve JavaScript files

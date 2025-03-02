@@ -5,6 +5,7 @@ A command-line tool for downloading and managing arXiv papers, including both PD
 ## Features
 
 - Download papers from arXiv by URL
+- Download associated GitHub repositories
 - Organize papers with tags
 - List and search your paper collection
 - Export BibTeX citations
@@ -24,10 +25,16 @@ npm install -g arxiv-downloader
 adown https://arxiv.org/abs/2101.12345
 ```
 
-Or with a tag:
+With a tag:
 
 ```bash
 adown https://arxiv.org/abs/2101.12345 -t machine-learning
+```
+
+With a GitHub repository:
+
+```bash
+adown https://arxiv.org/abs/2101.12345 --github https://github.com/username/repository
 ```
 
 ### List papers
@@ -48,6 +55,32 @@ Search by terms:
 adown list neural networks
 ```
 
+### Open paper directories
+
+Open the parent directory containing all files for a paper:
+
+```bash
+adown open 2101.12345
+```
+
+Open the LaTeX source directory:
+
+```bash
+adown open 2101.12345 --source
+```
+
+Open the GitHub repository directory:
+
+```bash
+adown open 2101.12345 --github
+```
+
+Open the entire knowledge base:
+
+```bash
+adown open-kb
+```
+
 ### Export BibTeX
 
 Command line export:
@@ -58,32 +91,9 @@ adown bibtex -t machine-learning  # Export papers with a specific tag
 adown bibtex neural networks  # Export papers matching search terms
 ```
 
-### Web Interface for BibTeX Export
+### Web Interface
 
-Start the web interface for BibTeX export:
-
-```bash
-adown bibtex-web
-```
-
-This will start a local web server and open your browser. The web interface allows you to:
-
-- Search papers by title, author, or abstract
-- Filter papers by tag
-- Select papers individually or all at once
-- Preview BibTeX entries
-- Copy BibTeX to clipboard
-- Export BibTeX to a file
-
-You can specify a custom port:
-
-```bash
-adown bibtex-web -p 8080
-```
-
-### Comprehensive Web Interface
-
-Start the comprehensive web interface for managing all your arXiv papers:
+Start the web interface for managing all your arXiv papers:
 
 ```bash
 adown web
@@ -98,11 +108,15 @@ This will start a local web server and open your browser. The web interface prov
   - Delete papers individually or in bulk
   - Open PDF files directly from the interface
   - Extract and view LaTeX source files
+  - Open GitHub repositories associated with papers
+  - Edit paper details, including GitHub repository URLs
   - Export BibTeX citations directly from the list view
   - Preview, copy, or download BibTeX entries for selected papers
+  - Open the entire knowledge base directory
 
 - **Paper Download**:
   - Download new papers from arXiv URLs
+  - Add GitHub repository URLs during download
   - Add tags during download for better organization
 
 You can specify a custom port:

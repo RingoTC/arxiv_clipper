@@ -1,6 +1,7 @@
 // DOM Elements
 const paperUrlInput = document.getElementById('paper-url');
 const paperTagInput = document.getElementById('paper-tag');
+const paperGithubInput = document.getElementById('paper-github');
 const downloadTagButtons = document.getElementById('download-tag-buttons');
 const downloadButton = document.getElementById('download-button');
 
@@ -218,6 +219,9 @@ async function downloadPaper() {
     // Get tag
     const tag = paperTagInput.value.trim() || 'default';
     
+    // Get GitHub URL (optional)
+    const githubUrl = paperGithubInput.value.trim();
+    
     // Disable button and show loading
     downloadButton.disabled = true;
     const originalText = downloadButton.innerHTML;
@@ -231,7 +235,11 @@ async function downloadPaper() {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ url, tag })
+            body: JSON.stringify({ 
+                url, 
+                tag,
+                githubUrl: githubUrl || undefined
+            })
         });
         
         if (!response.ok) {
@@ -251,11 +259,10 @@ async function downloadPaper() {
             
             // Clear inputs
             paperUrlInput.value = '';
+            paperGithubInput.value = '';
             
-            // Refresh papers list if we're on the papers tab
-            if (state.activeTab === 'list-tab') {
-                fetchPapers();
-            }
+            // Always refresh papers list regardless of active tab
+            fetchPapers();
             
             // 延迟恢复按钮状态
             setTimeout(() => {

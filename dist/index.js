@@ -23,6 +23,8 @@ const clean_1 = __importDefault(require("./commands/clean"));
 const bibtex_1 = __importDefault(require("./commands/bibtex"));
 // @ts-ignore
 const bibtex_web_1 = __importDefault(require("./commands/bibtex-web"));
+// @ts-ignore
+const open_1 = __importDefault(require("./commands/open"));
 // Set up CLI
 const program = new commander_1.Command();
 program
@@ -38,17 +40,24 @@ program
 (0, clean_1.default)(program);
 (0, bibtex_1.default)(program);
 (0, bibtex_web_1.default)(program);
+(0, open_1.default)(program);
 // Handle direct URL input (default to download command)
 program
     .arguments('[url]')
     .option('-t, --tag <tag>', 'Tag for organizing papers', 'default')
+    .option('--github <url>', 'GitHub repository URL to download along with the paper')
     .action(async (url, options) => {
     if (url && url.includes('arxiv.org')) {
         // If URL is provided, call the download command
         const downloadCmd = program.commands.find(cmd => cmd.name() === 'download');
         if (downloadCmd) {
             // Call the download command directly
-            program.parse(['node', 'script.js', 'download', url, ...(options?.tag ? ['-t', options.tag] : [])]);
+            const args = ['node', 'script.js', 'download', url];
+            if (options?.tag)
+                args.push('-t', options.tag);
+            if (options?.github)
+                args.push('--github', options.github);
+            program.parse(args);
         }
     }
     else if (!process.argv.slice(2).length || (url && !url.includes('arxiv.org'))) {

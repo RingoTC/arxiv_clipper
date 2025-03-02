@@ -9,9 +9,14 @@ import { Command } from 'commander';
 import { CommandFunction } from '../types';
 import axios from 'axios';
 import fs from 'fs';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 interface DownloadOptions {
   tag: string;
+  github?: string;
 }
 
 export async function download(url: string, options: DownloadOptions) {
@@ -89,6 +94,30 @@ export async function download(url: string, options: DownloadOptions) {
       sourceWriter.on('error', (err) => reject(err));
     });
 
+    // Handle GitHub repository download if provided
+    let githubUrl: string | undefined;
+    let localGithubPath: string | undefined;
+    
+    if (options.github) {
+      githubUrl = options.github;
+      spinner.text = 'Downloading GitHub repository...';
+      
+      // Create GitHub directory
+      const githubDir = join(paperDir, 'github');
+      await mkdir(githubDir, { recursive: true });
+      
+      // Clone the repository
+      try {
+        await execAsync(`git clone ${githubUrl} ${githubDir}`);
+        localGithubPath = githubDir;
+        spinner.succeed(chalk.green(`Successfully cloned GitHub repository: ${githubUrl}`));
+        spinner.start('Finalizing paper download...');
+      } catch (error) {
+        console.error(chalk.yellow(`Warning: Failed to clone GitHub repository: ${githubUrl}`));
+        console.error(error);
+      }
+    }
+
     await browser.close();
 
     // Save to database
@@ -104,8 +133,10 @@ export async function download(url: string, options: DownloadOptions) {
       tag: options.tag,
       pdfUrl,
       sourceUrl,
+      githubUrl,
       localPdfPath: pdfPath,
       localSourcePath: sourcePath,
+      localGithubPath,
       dateAdded: new Date().toISOString(),
       arxivId
     });
@@ -122,8 +153,9 @@ const downloadCommand: CommandFunction = (program: Command) => {
     .command('download <url>')
     .description('Download a paper from arXiv')
     .option('-t, --tag <tag>', 'Tag for organizing papers', 'default')
+    .option('--github <url>', 'GitHub repository URL to download along with the paper')
     .action((url, options) => {
-      download(url, { tag: options.tag });
+      download(url, { tag: options.tag, github: options.github });
     });
 };
 

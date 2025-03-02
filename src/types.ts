@@ -19,6 +19,8 @@ export interface Paper {
   sourceUrl?: string;
   localPdfPath?: string;
   localSourcePath?: string;
+  githubUrl?: string;
+  localGithubPath?: string;
   dateAdded?: string;
   arxivId?: string;
 }
@@ -32,6 +34,7 @@ export interface CommandOptions {
   force?: boolean;
   output?: string;
   all?: boolean;
+  github?: string;
 }
 
 export type CommandFunction = (program: Command) => void; 

@@ -4,6 +4,7 @@ const searchInput = document.getElementById('search-input');
 const tagFilterButtons = document.getElementById('tag-filter-buttons');
 const selectAllCheckbox = document.getElementById('select-all');
 const deleteSelectedButton = document.getElementById('delete-selected');
+const openKnowledgeBaseButton = document.getElementById('open-kb-button');
 // Add BibTeX button references
 const previewBibtexButton = document.getElementById('preview-button');
 const copyBibtexButton = document.getElementById('copy-button');
@@ -44,7 +45,7 @@ paperListStyles.textContent = `
     
     .paper-content {
         flex: 1;
-        min-width: 0; /* 防止内容溢出 */
+        min-width: 0; /* Prevent content overflow */
     }
     
     .paper-title {
@@ -100,194 +101,215 @@ paperListStyles.textContent = `
     .select-all-container {
         display: flex;
         align-items: center;
-        margin-top: 20px;
-        margin-bottom: 20px;
-        flex-wrap: wrap;
+        margin-bottom: 15px;
     }
     
     .select-all-container label {
-        margin: 0 15px 0 5px;
+        margin: 0 0 0 5px;
         display: inline;
     }
     
-    /* 统一按钮样式和对齐方式 */
-    .action-buttons {
-        display: inline-flex;
-        gap: 10px;
+    .select-all-container .action-buttons {
         margin-left: auto;
-        vertical-align: middle;
-        flex-wrap: wrap;
+        margin-top: 0;
     }
     
-    .action-buttons button {
-        height: 38px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+    .edit-button {
+        color: var(--info-color);
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 16px;
+        padding: 0;
+        margin-left: 5px;
     }
     
-    #delete-selected {
-        height: 38px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+    .edit-button:hover {
+        color: #2980b9;
     }
     
-    /* 响应式设计 */
-    @media (max-width: 768px) {
-        .paper-card {
-            flex-direction: column;
-            align-items: flex-start;
-        }
-        
-        .paper-header {
-            width: 100%;
-            justify-content: space-between;
-        }
-        
-        .paper-actions {
-            margin-left: 0;
-            width: 100%;
-            justify-content: flex-end;
-            margin-top: 10px;
-            flex-wrap: wrap;
-        }
-        
-        .paper-tag {
-            margin-right: 0;
-            margin-bottom: 5px;
-        }
-        
-        .action-buttons {
-            margin-left: 0;
-            width: 100%;
-            justify-content: flex-end;
-        }
+    .dropdown {
+        position: relative;
+        display: inline-block;
+    }
+    
+    .dropdown-content {
+        display: none;
+        position: absolute;
+        right: 0;
+        background-color: var(--card-color);
+        min-width: 160px;
+        box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+        z-index: 1;
+        border-radius: 4px;
+    }
+    
+    .dropdown-content a {
+        color: var(--text-color);
+        padding: 8px 12px;
+        text-decoration: none;
+        display: block;
+        font-size: 14px;
+    }
+    
+    .dropdown-content a:hover {
+        background-color: #f1f1f1;
+    }
+    
+    .dropdown:hover .dropdown-content {
+        display: block;
+    }
+    
+    .more-actions-button {
+        background: none;
+        border: none;
+        color: var(--text-color);
+        cursor: pointer;
+        font-size: 16px;
+        padding: 4px;
     }
 `;
 document.head.appendChild(paperListStyles);
 
-// Fetch papers from the server
+// Fetch papers from API
 async function fetchPapers() {
     try {
-        papersContainer.innerHTML = '<div class="loading">Loading papers...</div>';
-        
         const response = await fetch('/api/papers');
+        
         if (!response.ok) {
             throw new Error('Failed to fetch papers');
         }
         
-        state.papers = await response.json();
+        const papers = await response.json();
         
-        // Extract unique tags
-        state.tags.clear();
-        state.papers.forEach(paper => {
-            if (paper.tag) {
-                state.tags.add(paper.tag);
-            }
-        });
+        // Update state
+        state.papers = papers;
+        
+        // Extract tags
+        state.tags = new Set(papers.map(paper => paper.tag || 'default').filter(Boolean));
+        
+        // Apply current filter
+        filterPapers();
         
         // Populate tag filter buttons
         populateTagFilterButtons();
         
-        // Apply initial filtering
-        applyFilters();
-        
+        // Update download tag buttons if on download tab
+        if (state.activeTab === 'download-tab') {
+            populateDownloadTagButtons();
+        }
     } catch (error) {
         console.error('Error fetching papers:', error);
         papersContainer.innerHTML = `<div class="no-results">Error loading papers: ${error.message}</div>`;
     }
 }
 
+// Filter papers based on search text and tag
+function filterPapers() {
+    const { searchText, tag } = state.currentFilter;
+    
+    if (!searchText && !tag) {
+        state.filteredPapers = [...state.papers];
+    } else {
+        state.filteredPapers = state.papers.filter(paper => {
+            // Filter by tag if specified
+            if (tag && paper.tag !== tag) {
+                return false;
+            }
+            
+            // Filter by search text if specified
+            if (searchText) {
+                const searchLower = searchText.toLowerCase();
+                return (
+                    paper.title.toLowerCase().includes(searchLower) ||
+                    (typeof paper.authors === 'string' && paper.authors.toLowerCase().includes(searchLower)) ||
+                    (Array.isArray(paper.authors) && paper.authors.some(author => author.toLowerCase().includes(searchLower))) ||
+                    (paper.abstract && paper.abstract.toLowerCase().includes(searchLower)) ||
+                    (paper.id && paper.id.toLowerCase().includes(searchLower))
+                );
+            }
+            
+            return true;
+        });
+    }
+    
+    // Clear selected papers that are no longer in filtered list
+    const filteredIds = new Set(state.filteredPapers.map(p => p.id));
+    state.selectedPapers.forEach(id => {
+        if (!filteredIds.has(id)) {
+            state.selectedPapers.delete(id);
+        }
+    });
+    
+    // Render papers
+    renderPapers();
+}
+
 // Populate tag filter buttons
 function populateTagFilterButtons() {
-    const sortedTags = Array.from(state.tags).sort();
-    
     // Clear existing buttons
     tagFilterButtons.innerHTML = '';
     
-    // Add "All Tags" button
-    const allTagsButton = document.createElement('span');
-    allTagsButton.className = 'tag-button' + (state.currentFilter.tags.length === 0 ? ' active' : '');
-    allTagsButton.textContent = 'All Tags';
-    allTagsButton.dataset.tag = '';
-    allTagsButton.addEventListener('click', () => {
-        // Clear all selected tags
-        state.currentFilter.tags = [];
-        updateTagButtonsState();
-        applyFilters();
+    // Add "All" button
+    const allButton = document.createElement('span');
+    allButton.className = 'tag-button' + (!state.currentFilter.tag ? ' active' : '');
+    allButton.textContent = 'All';
+    allButton.addEventListener('click', () => {
+        state.currentFilter.tag = '';
+        
+        // Update active state
+        tagFilterButtons.querySelectorAll('.tag-button').forEach(btn => btn.classList.remove('active'));
+        allButton.classList.add('active');
+        
+        // Filter papers
+        filterPapers();
     });
-    tagFilterButtons.appendChild(allTagsButton);
+    tagFilterButtons.appendChild(allButton);
     
     // Add tag buttons
-    sortedTags.forEach(tag => {
-        const tagButton = document.createElement('span');
-        tagButton.className = 'tag-button' + (state.currentFilter.tags.includes(tag) ? ' active' : '');
-        tagButton.textContent = tag;
-        tagButton.dataset.tag = tag;
-        tagButton.addEventListener('click', () => {
-            // Toggle tag selection
-            if (state.currentFilter.tags.includes(tag)) {
-                state.currentFilter.tags = state.currentFilter.tags.filter(t => t !== tag);
-            } else {
-                state.currentFilter.tags.push(tag);
-            }
-            updateTagButtonsState();
-            applyFilters();
+    if (state.tags) {
+        const sortedTags = Array.from(state.tags).sort();
+        
+        sortedTags.forEach(tag => {
+            const tagButton = document.createElement('span');
+            tagButton.className = 'tag-button' + (state.currentFilter.tag === tag ? ' active' : '');
+            tagButton.textContent = tag;
+            tagButton.addEventListener('click', () => {
+                state.currentFilter.tag = tag;
+                
+                // Update active state
+                tagFilterButtons.querySelectorAll('.tag-button').forEach(btn => btn.classList.remove('active'));
+                tagButton.classList.add('active');
+                
+                // Filter papers
+                filterPapers();
+            });
+            tagFilterButtons.appendChild(tagButton);
         });
-        tagFilterButtons.appendChild(tagButton);
-    });
+    }
 }
 
-// Update tag buttons state
-function updateTagButtonsState() {
-    // Update "All Tags" button
-    const allTagsButton = tagFilterButtons.querySelector('[data-tag=""]');
-    if (allTagsButton) {
-        allTagsButton.classList.toggle('active', state.currentFilter.tags.length === 0);
+// Update button states based on selection
+function updateButtonStates() {
+    const hasSelection = state.selectedPapers.size > 0;
+    
+    deleteSelectedButton.disabled = !hasSelection;
+    previewBibtexButton.disabled = !hasSelection;
+    copyBibtexButton.disabled = !hasSelection;
+    exportBibtexButton.disabled = !hasSelection;
+}
+
+// Update select all checkbox state
+function updateSelectAllState() {
+    if (state.filteredPapers.length === 0) {
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.disabled = true;
+    } else {
+        selectAllCheckbox.disabled = false;
+        selectAllCheckbox.checked = state.filteredPapers.length === state.selectedPapers.size;
     }
     
-    // Update individual tag buttons
-    tagFilterButtons.querySelectorAll('.tag-button[data-tag]:not([data-tag=""])').forEach(button => {
-        const tag = button.dataset.tag;
-        button.classList.toggle('active', state.currentFilter.tags.includes(tag));
-    });
-}
-
-// Apply filters based on search text and tags
-function applyFilters() {
-    const { searchText, tags } = state.currentFilter;
-    
-    state.filteredPapers = state.papers.filter(paper => {
-        // Filter by tags if selected
-        if (tags.length > 0 && (!paper.tag || !tags.includes(paper.tag))) {
-            return false;
-        }
-        
-        // Filter by search text if provided
-        if (searchText) {
-            const searchLower = searchText.toLowerCase();
-            const titleMatch = paper.title && paper.title.toLowerCase().includes(searchLower);
-            const abstractMatch = paper.abstract && paper.abstract.toLowerCase().includes(searchLower);
-            
-            // Check authors
-            let authorMatch = false;
-            if (Array.isArray(paper.authors)) {
-                authorMatch = paper.authors.some(author => 
-                    author.toLowerCase().includes(searchLower)
-                );
-            } else if (typeof paper.authors === 'string') {
-                authorMatch = paper.authors.toLowerCase().includes(searchLower);
-            }
-            
-            return titleMatch || abstractMatch || authorMatch;
-        }
-        
-        return true;
-    });
-    
-    renderPapers();
-    updateSelectAllState();
+    updateButtonStates();
 }
 
 // Render papers to the DOM
@@ -318,7 +340,19 @@ function renderPapers() {
             tagElement.style.display = 'none';
         }
         
-        paperElement.querySelector('.paper-title').textContent = paper.title;
+        const titleElement = paperElement.querySelector('.paper-title');
+        titleElement.textContent = paper.title;
+        
+        // Add edit button
+        const editButton = document.createElement('button');
+        editButton.className = 'edit-button';
+        editButton.innerHTML = '<i class="fas fa-edit"></i>';
+        editButton.title = 'Edit paper details';
+        editButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openEditModal(paper.id);
+        });
+        titleElement.appendChild(editButton);
         
         const authorsElement = paperElement.querySelector('.paper-authors');
         if (Array.isArray(paper.authors)) {
@@ -335,6 +369,9 @@ function renderPapers() {
         }
         
         paperElement.querySelector('.paper-id').textContent = `arXiv ID: ${paper.arxivId || paper.id}`;
+        
+        // Set up action buttons
+        const actionsContainer = paperElement.querySelector('.paper-actions');
         
         // Set up PDF button
         const pdfButton = paperElement.querySelector('.view-pdf-button');
@@ -353,6 +390,22 @@ function renderPapers() {
             sourceButton.disabled = true;
             sourceButton.title = 'Source not available locally';
         }
+        
+        // Add GitHub button if available
+        if (paper.localGithubPath) {
+            const githubButton = document.createElement('button');
+            githubButton.className = 'button-info';
+            githubButton.innerHTML = '<i class="fab fa-github"></i> GitHub';
+            githubButton.addEventListener('click', () => openPaperDirectory(paper.id, 'github'));
+            actionsContainer.appendChild(githubButton);
+        }
+        
+        // Add Open button (opens parent directory)
+        const openButton = document.createElement('button');
+        openButton.className = 'button-info';
+        openButton.innerHTML = '<i class="fas fa-folder-open"></i> Open';
+        openButton.addEventListener('click', () => openPaperDirectory(paper.id, 'parent'));
+        actionsContainer.appendChild(openButton);
         
         // Add to container
         papersContainer.appendChild(paperElement);
@@ -381,43 +434,40 @@ function handlePaperSelection(e) {
     updateSelectAllState();
 }
 
-// Update select all checkbox state
-function updateSelectAllState() {
-    if (state.filteredPapers.length === 0) {
-        selectAllCheckbox.checked = false;
-        selectAllCheckbox.disabled = true;
+// Handle select all checkbox
+function handleSelectAll() {
+    if (selectAllCheckbox.checked) {
+        // Select all papers
+        state.filteredPapers.forEach(paper => {
+            state.selectedPapers.add(paper.id);
+        });
     } else {
-        selectAllCheckbox.disabled = false;
-        
-        const allSelected = state.filteredPapers.every(paper => 
-            state.selectedPapers.has(paper.id)
-        );
-        
-        selectAllCheckbox.checked = allSelected;
+        // Deselect all papers
+        state.selectedPapers.clear();
     }
-}
-
-// Update button states based on selection
-function updateButtonStates() {
-    const hasSelection = state.selectedPapers.size > 0;
-    deleteSelectedButton.disabled = !hasSelection;
     
-    // Update BibTeX buttons state
-    previewBibtexButton.disabled = !hasSelection;
-    copyBibtexButton.disabled = !hasSelection;
-    exportBibtexButton.disabled = !hasSelection;
+    // Update checkboxes
+    document.querySelectorAll('.paper-checkbox').forEach(checkbox => {
+        checkbox.checked = state.selectedPapers.has(checkbox.dataset.id);
+    });
+    
+    updateButtonStates();
 }
 
 // Delete selected papers
 async function deleteSelectedPapers() {
-    if (state.selectedPapers.size === 0) return;
+    if (state.selectedPapers.size === 0) {
+        return;
+    }
     
     const confirmDelete = confirm(`Are you sure you want to delete ${state.selectedPapers.size} paper(s)?`);
-    if (!confirmDelete) return;
+    if (!confirmDelete) {
+        return;
+    }
     
     try {
-        const response = await fetch('/api/papers', {
-            method: 'DELETE',
+        const response = await fetch('/api/papers/delete', {
+            method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
@@ -427,16 +477,16 @@ async function deleteSelectedPapers() {
         });
         
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to delete papers');
+            throw new Error('Failed to delete papers');
         }
         
         showAlert(`Successfully deleted ${state.selectedPapers.size} paper(s)`, 'success');
         
-        // Clear selection and refresh papers
+        // Clear selected papers
         state.selectedPapers.clear();
-        await fetchPapers();
         
+        // Refresh papers
+        fetchPapers();
     } catch (error) {
         console.error('Error deleting papers:', error);
         showAlert(`Error: ${error.message}`, 'error');
@@ -445,98 +495,68 @@ async function deleteSelectedPapers() {
 
 // View PDF
 function viewPdf(paperId) {
-    fetch(`/api/pdf/${paperId}`)
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(data => {
-                    throw new Error(data.error || 'Failed to open PDF');
-                });
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.success) {
-                showAlert('PDF opened in your default application', 'success');
-            }
-        })
-        .catch(error => {
-            console.error('Error opening PDF:', error);
-            showAlert(`Error: ${error.message}`, 'error');
-        });
+    fetch(`/api/pdf/${paperId}`, {
+        method: 'GET'
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Failed to open PDF');
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            showAlert('Opening PDF...', 'success');
+        } else {
+            throw new Error(data.error || 'Unknown error');
+        }
+    })
+    .catch(error => {
+        console.error('Error opening PDF:', error);
+        showAlert(`Error: ${error.message}`, 'error');
+    });
 }
 
-// View Source
+// View source
 function viewSource(paperId) {
-    fetch(`/api/source/${paperId}`)
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(data => {
-                    throw new Error(data.error || 'Failed to extract source');
-                });
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.success) {
-                showAlert('Source extracted and opened in your file explorer', 'success');
-            }
-        })
-        .catch(error => {
-            console.error('Error extracting source:', error);
-            showAlert(`Error: ${error.message}`, 'error');
-        });
+    fetch(`/api/source/${paperId}`, {
+        method: 'GET'
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Failed to extract source');
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            showAlert('Extracting and opening source files...', 'success');
+        } else {
+            throw new Error(data.error || 'Unknown error');
+        }
+    })
+    .catch(error => {
+        console.error('Error extracting source:', error);
+        showAlert(`Error: ${error.message}`, 'error');
+    });
 }
-
-// Event Listeners
-searchInput.addEventListener('input', (e) => {
-    state.currentFilter.searchText = e.target.value;
-    applyFilters();
-});
-
-selectAllCheckbox.addEventListener('change', (e) => {
-    if (e.target.checked) {
-        // Select all visible papers
-        state.filteredPapers.forEach(paper => {
-            state.selectedPapers.add(paper.id);
-        });
-    } else {
-        // Deselect all papers
-        state.selectedPapers.clear();
-    }
-    
-    renderPapers();
-    updateButtonStates();
-});
-
-deleteSelectedButton.addEventListener('click', deleteSelectedPapers);
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
-    // Update state to include tags array
-    state.currentFilter.tags = [];
-    
+    // Fetch papers
     fetchPapers();
     
     // Event listeners
-    searchInput.addEventListener('input', (e) => {
-        state.currentFilter.searchText = e.target.value;
-        applyFilters();
+    searchInput.addEventListener('input', () => {
+        state.currentFilter.searchText = searchInput.value.trim();
+        filterPapers();
     });
     
-    selectAllCheckbox.addEventListener('change', (e) => {
-        if (e.target.checked) {
-            // Select all visible papers
-            state.filteredPapers.forEach(paper => {
-                state.selectedPapers.add(paper.id);
-            });
-        } else {
-            // Deselect all papers
-            state.selectedPapers.clear();
-        }
-        
-        renderPapers();
-        updateButtonStates();
-    });
-    
+    selectAllCheckbox.addEventListener('change', handleSelectAll);
     deleteSelectedButton.addEventListener('click', deleteSelectedPapers);
+    
+    // Open knowledge base button
+    if (openKnowledgeBaseButton) {
+        openKnowledgeBaseButton.addEventListener('click', openKnowledgeBase);
+    }
 }); 
