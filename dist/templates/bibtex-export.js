@@ -1,8 +1,21 @@
 // DOM Elements
-const previewButton = document.getElementById('preview-button');
-const copyButton = document.getElementById('copy-button');
-const exportButton = document.getElementById('export-button');
-const bibtexPreview = document.getElementById('bibtex-preview');
+let previewButton;
+let copyButton;
+let exportButton;
+let bibtexPreview;
+
+// Initialize DOM elements after the document is fully loaded
+function initElements() {
+    previewButton = document.getElementById('preview-button');
+    copyButton = document.getElementById('copy-button');
+    exportButton = document.getElementById('export-button');
+    bibtexPreview = document.getElementById('bibtex-preview');
+    
+    // Add event listeners only after elements are found
+    if (copyButton) copyButton.addEventListener('click', copyBibTeX);
+    if (exportButton) exportButton.addEventListener('click', exportBibTeX);
+    if (previewButton) previewButton.addEventListener('click', previewBibTeX);
+}
 
 // Generate BibTeX for selected papers
 function generateBibTeX() {
@@ -43,6 +56,8 @@ function generateBibTeX() {
 
 // Preview BibTeX
 function previewBibTeX() {
+    if (!bibtexPreview) return;
+    
     const bibtex = generateBibTeX();
     bibtexPreview.textContent = bibtex;
     bibtexPreview.style.display = 'block';
@@ -55,14 +70,29 @@ function previewBibTeX() {
 function copyBibTeX() {
     const bibtex = generateBibTeX();
     
-    navigator.clipboard.writeText(bibtex)
-        .then(() => {
-            showAlert('BibTeX copied to clipboard!', 'success');
-        })
-        .catch(err => {
-            console.error('Failed to copy: ', err);
-            showAlert('Failed to copy to clipboard. Please try again.', 'error');
-        });
+    // Use a safer approach for clipboard operations
+    try {
+        // Create a temporary textarea element
+        const textarea = document.createElement('textarea');
+        textarea.value = bibtex;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'absolute';
+        textarea.style.left = '-9999px';
+        
+        // Append to the document, select and copy
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        
+        // Clean up
+        document.body.removeChild(textarea);
+        
+        // Show success message
+        showToast('Success', 'BibTeX copied to clipboard!', 'success');
+    } catch (err) {
+        console.error('Failed to copy: ', err);
+        showToast('Error', 'Failed to copy to clipboard. Please try again.', 'danger');
+    }
 }
 
 // Export BibTeX as file
@@ -71,24 +101,58 @@ function exportBibTeX() {
     const blob = new Blob([bibtex], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'arxiv-papers.bib';
-    document.body.appendChild(a);
-    a.click();
+    try {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'arxiv-papers.bib';
+        document.body.appendChild(a);
+        a.click();
+        
+        // Cleanup
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 100);
+        
+        showToast('Success', 'BibTeX exported to file', 'success');
+    } catch (err) {
+        console.error('Failed to export: ', err);
+        showToast('Error', 'Failed to export BibTeX. Please try again.', 'danger');
+    }
+}
+
+// Show toast notification
+function showToast(title, message, type = 'info') {
+    const toastContainer = document.querySelector('.toast-container');
+    if (!toastContainer) return;
     
-    // Cleanup
-    setTimeout(() => {
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }, 100);
+    const toastId = 'toast-' + Date.now();
     
-    showAlert('BibTeX exported to file', 'success');
+    const toastHTML = `
+        <div id="${toastId}" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+                <strong class="me-auto">${title}</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body">
+                ${message}
+            </div>
+        </div>
+    `;
+    
+    toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+    
+    const toastElement = document.getElementById(toastId);
+    if (toastElement) {
+        const toast = new bootstrap.Toast(toastElement, { autohide: true, delay: 3000 });
+        toast.show();
+        
+        // Remove toast from DOM after it's hidden
+        toastElement.addEventListener('hidden.bs.toast', () => {
+            toastElement.remove();
+        });
+    }
 }
 
 // Event Listeners
-document.addEventListener('DOMContentLoaded', () => {
-    previewButton.addEventListener('click', previewBibTeX);
-    copyButton.addEventListener('click', copyBibTeX);
-    exportButton.addEventListener('click', exportBibTeX);
-}); 
+document.addEventListener('DOMContentLoaded', initElements); 

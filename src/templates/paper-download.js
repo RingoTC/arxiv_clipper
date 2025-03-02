@@ -4,6 +4,7 @@ const paperTagInput = document.getElementById('paper-tag');
 const paperGithubInput = document.getElementById('paper-github');
 const downloadTagButtons = document.getElementById('download-tag-buttons');
 const downloadButton = document.getElementById('download-button');
+const paperTagSelect = document.getElementById('paper-tag-select');
 
 // 添加按钮状态样式
 const downloadButtonStyles = document.createElement('style');
@@ -86,18 +87,20 @@ downloadButtonStyles.textContent = `
 `;
 document.head.appendChild(downloadButtonStyles);
 
-// Populate tag buttons for download page
-function populateDownloadTagButtons() {
-    // Clear existing buttons
-    downloadTagButtons.innerHTML = '';
+// Populate tag selector for download page
+function populateTagSelector() {
+    // Clear existing options (except the first one)
+    while (paperTagSelect.options.length > 1) {
+        paperTagSelect.remove(1);
+    }
     
-    // Add default tag button
-    const defaultTagButton = document.createElement('span');
-    defaultTagButton.className = 'tag-button' + (paperTagInput.value === 'default' ? ' selected' : '');
-    defaultTagButton.textContent = 'default';
-    defaultTagButton.dataset.tag = 'default';
-    defaultTagButton.addEventListener('click', () => selectDownloadTag('default'));
-    downloadTagButtons.appendChild(defaultTagButton);
+    // Add default tag option if not already present
+    if (paperTagSelect.options.length === 1) {
+        const defaultOption = document.createElement('option');
+        defaultOption.value = 'default';
+        defaultOption.textContent = 'default';
+        paperTagSelect.appendChild(defaultOption);
+    }
     
     // Add existing tags from papers
     if (state && state.tags) {
@@ -105,45 +108,82 @@ function populateDownloadTagButtons() {
         
         sortedTags.forEach(tag => {
             if (tag !== 'default') {
-                const tagButton = document.createElement('span');
-                tagButton.className = 'tag-button' + (paperTagInput.value === tag ? ' selected' : '');
-                tagButton.textContent = tag;
-                tagButton.dataset.tag = tag;
-                tagButton.addEventListener('click', () => selectDownloadTag(tag));
-                downloadTagButtons.appendChild(tagButton);
+                const option = document.createElement('option');
+                option.value = tag;
+                option.textContent = tag;
+                paperTagSelect.appendChild(option);
             }
         });
     }
     
-    // Add "New Tag" input container
+    // Add option for creating a new tag
+    const newTagOption = document.createElement('option');
+    newTagOption.value = 'new';
+    newTagOption.textContent = '+ Create new tag';
+    paperTagSelect.appendChild(newTagOption);
+    
+    // Update tag buttons display
+    updateTagButtonsDisplay();
+    
+    // Add event listener to select
+    paperTagSelect.addEventListener('change', handleTagSelectChange);
+}
+
+// Handle tag select change
+function handleTagSelectChange() {
+    const selectedValue = paperTagSelect.value;
+    
+    if (selectedValue === 'new') {
+        // Show input for new tag
+        showNewTagInput();
+    } else {
+        // Update hidden input and tag buttons
+        paperTagInput.value = selectedValue;
+        updateTagButtonsDisplay();
+    }
+}
+
+// Show input for creating a new tag
+function showNewTagInput() {
+    // Clear existing buttons
+    downloadTagButtons.innerHTML = '';
+    
+    // Create input container
     const newTagContainer = document.createElement('div');
-    newTagContainer.className = 'new-tag-container';
+    newTagContainer.className = 'input-group';
     
     // Create input field
     const newTagInput = document.createElement('input');
     newTagInput.type = 'text';
-    newTagInput.className = 'new-tag-input';
-    newTagInput.placeholder = 'New tag...';
+    newTagInput.className = 'form-control';
+    newTagInput.placeholder = 'Enter new tag name';
     newTagInput.maxLength = 30;
     
     // Create add button
     const addButton = document.createElement('button');
-    addButton.className = 'new-tag-add';
-    addButton.innerHTML = '<i class="fas fa-plus"></i>';
-    addButton.title = 'Add new tag';
+    addButton.className = 'btn btn-success';
+    addButton.innerHTML = '<i class="fas fa-check"></i>';
+    addButton.type = 'button';
     
-    // Create error message element
-    const errorMessage = document.createElement('div');
-    errorMessage.className = 'new-tag-error';
-    errorMessage.textContent = 'Tag already exists';
+    // Create cancel button
+    const cancelButton = document.createElement('button');
+    cancelButton.className = 'btn btn-outline-secondary';
+    cancelButton.innerHTML = '<i class="fas fa-times"></i>';
+    cancelButton.type = 'button';
     
     // Add elements to container
     newTagContainer.appendChild(newTagInput);
-    newTagContainer.appendChild(addButton);
+    const btnGroup = document.createElement('div');
+    btnGroup.className = 'input-group-append';
+    btnGroup.appendChild(addButton);
+    btnGroup.appendChild(cancelButton);
+    newTagContainer.appendChild(btnGroup);
     
     // Add container to buttons
     downloadTagButtons.appendChild(newTagContainer);
-    downloadTagButtons.appendChild(errorMessage);
+    
+    // Focus input
+    newTagInput.focus();
     
     // Add event listeners
     function handleAddTag() {
@@ -151,11 +191,7 @@ function populateDownloadTagButtons() {
         if (newTagName) {
             // Check if tag already exists
             if (state && state.tags && state.tags.has(newTagName)) {
-                // Show error message
-                errorMessage.style.display = 'block';
-                setTimeout(() => {
-                    errorMessage.style.display = 'none';
-                }, 3000);
+                showToast('Error', 'Tag already exists', 'danger');
                 return;
             }
             
@@ -164,41 +200,62 @@ function populateDownloadTagButtons() {
                 state.tags.add(newTagName);
             }
             
-            // Create new button
-            const tagButton = document.createElement('span');
-            tagButton.className = 'tag-button selected';
-            tagButton.textContent = newTagName;
-            tagButton.dataset.tag = newTagName;
-            tagButton.addEventListener('click', () => selectDownloadTag(newTagName));
+            // Add to select dropdown
+            const option = document.createElement('option');
+            option.value = newTagName;
+            option.textContent = newTagName;
             
-            // Insert before the new tag container
-            downloadTagButtons.insertBefore(tagButton, newTagContainer);
+            // Insert before the "Create new tag" option
+            paperTagSelect.insertBefore(option, paperTagSelect.lastChild);
             
             // Select the new tag
-            selectDownloadTag(newTagName);
+            paperTagSelect.value = newTagName;
+            paperTagInput.value = newTagName;
             
-            // Clear input
-            newTagInput.value = '';
+            // Update tag buttons
+            updateTagButtonsDisplay();
+            
+            showToast('Success', `Tag "${newTagName}" created`, 'success');
         }
     }
     
+    function handleCancel() {
+        // Reset select to previous value
+        if (paperTagInput.value) {
+            paperTagSelect.value = paperTagInput.value;
+        } else {
+            paperTagSelect.selectedIndex = 0;
+        }
+        
+        // Update tag buttons
+        updateTagButtonsDisplay();
+    }
+    
     addButton.addEventListener('click', handleAddTag);
+    cancelButton.addEventListener('click', handleCancel);
     newTagInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
             handleAddTag();
+        } else if (e.key === 'Escape') {
+            handleCancel();
         }
     });
 }
 
-// Select a tag for download
-function selectDownloadTag(tag) {
-    // Update hidden input value
-    paperTagInput.value = tag;
+// Update tag buttons display based on selected tag
+function updateTagButtonsDisplay() {
+    // Clear existing buttons
+    downloadTagButtons.innerHTML = '';
     
-    // Update button states
-    downloadTagButtons.querySelectorAll('.tag-button[data-tag]').forEach(button => {
-        button.classList.toggle('selected', button.dataset.tag === tag);
-    });
+    const selectedTag = paperTagInput.value || paperTagSelect.value;
+    
+    if (selectedTag && selectedTag !== 'new') {
+        // Show the selected tag as a button
+        const tagButton = document.createElement('span');
+        tagButton.className = 'tag-button selected';
+        tagButton.textContent = selectedTag;
+        downloadTagButtons.appendChild(tagButton);
+    }
 }
 
 // Download a paper
@@ -206,18 +263,18 @@ async function downloadPaper() {
     // Validate URL
     const url = paperUrlInput.value.trim();
     if (!url) {
-        showAlert('Please enter a valid arXiv URL', 'error');
+        showToast('Error', 'Please enter a valid arXiv URL', 'danger');
         return;
     }
     
     // Check if URL is an arXiv URL
     if (!url.includes('arxiv.org')) {
-        showAlert('URL must be from arxiv.org', 'error');
+        showToast('Error', 'URL must be from arxiv.org', 'danger');
         return;
     }
     
     // Get tag
-    const tag = paperTagInput.value.trim() || 'default';
+    const tag = paperTagInput.value.trim() || paperTagSelect.value || 'default';
     
     // Get GitHub URL (optional)
     const githubUrl = paperGithubInput.value.trim();
@@ -227,7 +284,7 @@ async function downloadPaper() {
     const originalText = downloadButton.innerHTML;
     downloadButton.innerHTML = '<span style="opacity: 0;">Downloading...</span>';
     downloadButton.classList.add('button-loading');
-    showAlert('Downloading paper, this may take a moment...', 'success');
+    showToast('Info', 'Downloading paper, this may take a moment...', 'info');
     
     try {
         const response = await fetch('/api/papers', {
@@ -249,63 +306,72 @@ async function downloadPaper() {
         
         const data = await response.json();
         
-        if (data.success) {
-            // 显示成功状态
-            downloadButton.classList.remove('button-loading');
-            downloadButton.classList.add('button-success');
-            downloadButton.innerHTML = '<i class="fas fa-check"></i> Downloaded';
-            
-            showAlert('Paper downloaded successfully!', 'success');
-            
-            // Clear inputs
+        // Show success message
+        downloadButton.classList.remove('button-loading');
+        downloadButton.classList.add('button-success');
+        downloadButton.innerHTML = '<i class="fas fa-check"></i> Downloaded';
+        showToast('Success', `Paper "${data.title}" downloaded successfully`, 'success');
+        
+        // Reset form after a delay
+        setTimeout(() => {
             paperUrlInput.value = '';
             paperGithubInput.value = '';
+            downloadButton.disabled = false;
+            downloadButton.classList.remove('button-success');
+            downloadButton.innerHTML = originalText;
             
-            // Always refresh papers list regardless of active tab
-            fetchPapers();
-            
-            // 延迟恢复按钮状态
-            setTimeout(() => {
-                downloadButton.classList.remove('button-success');
-                downloadButton.disabled = false;
-                downloadButton.innerHTML = originalText;
-            }, 2000);
-        }
+            // Refresh paper list if we're on the list tab
+            if (document.getElementById('list-tab').classList.contains('active')) {
+                fetchPapers();
+            }
+        }, 3000);
     } catch (error) {
-        console.error('Error downloading paper:', error);
-        showAlert(`Error: ${error.message}`, 'error');
-        
-        // 恢复按钮状态
+        console.error('Download error:', error);
         downloadButton.classList.remove('button-loading');
         downloadButton.disabled = false;
         downloadButton.innerHTML = originalText;
+        showToast('Error', error.message, 'danger');
     }
 }
 
-// Initialize
-document.addEventListener('DOMContentLoaded', () => {
-    // Set default tag
-    paperTagInput.value = 'default';
+// Show toast notification
+function showToast(title, message, type = 'info') {
+    const toastContainer = document.querySelector('.toast-container');
+    if (!toastContainer) return;
     
-    // Populate tag buttons
-    populateDownloadTagButtons();
+    const toastId = 'toast-' + Date.now();
     
-    // Event Listeners
-    downloadButton.addEventListener('click', downloadPaper);
+    const toastHTML = `
+        <div id="${toastId}" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+                <strong class="me-auto">${title}</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body">
+                ${message}
+            </div>
+        </div>
+    `;
     
-    // Allow pressing Enter in the URL input to trigger download
-    paperUrlInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            downloadPaper();
-        }
-    });
+    toastContainer.insertAdjacentHTML('beforeend', toastHTML);
     
-    // Update tag buttons when switching to download tab
-    document.querySelectorAll('.nav-link').forEach(link => {
-        link.addEventListener('click', () => {
-            if (link.getAttribute('data-tab') === 'download-tab') {
-                populateDownloadTagButtons();
-            }
+    const toastElement = document.getElementById(toastId);
+    if (toastElement) {
+        const toast = new bootstrap.Toast(toastElement, { autohide: true, delay: 3000 });
+        toast.show();
+        
+        // Remove toast from DOM after it's hidden
+        toastElement.addEventListener('hidden.bs.toast', () => {
+            toastElement.remove();
         });
-    });
+    }
+}
+
+// Event listeners
+document.addEventListener('DOMContentLoaded', () => {
+    // Initialize tag selector
+    populateTagSelector();
+    
+    // Add download button event listener
+    downloadButton.addEventListener('click', downloadPaper);
 }); 

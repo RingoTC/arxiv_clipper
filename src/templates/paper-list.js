@@ -6,9 +6,10 @@ const selectAllCheckbox = document.getElementById('select-all');
 const deleteSelectedButton = document.getElementById('delete-selected');
 const openKnowledgeBaseButton = document.getElementById('open-kb-button');
 // Add BibTeX button references
-const previewBibtexButton = document.getElementById('preview-button');
 const copyBibtexButton = document.getElementById('copy-button');
 const exportBibtexButton = document.getElementById('export-button');
+// Note: preview-button may not exist in arxiv-manager.html
+const previewBibtexButton = document.getElementById('preview-button');
 
 // Paper list styles
 const paperListStyles = document.createElement('style');
@@ -184,10 +185,25 @@ document.head.appendChild(paperListStyles);
 // Fetch papers from API
 async function fetchPapers() {
     try {
+        if (!papersContainer) {
+            console.error('Papers container element not found');
+            return;
+        }
+        
+        // Show loading indicator
+        papersContainer.innerHTML = `
+            <div class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">Loading papers...</p>
+            </div>
+        `;
+        
         const response = await fetch('/api/papers');
         
         if (!response.ok) {
-            throw new Error('Failed to fetch papers');
+            throw new Error(`Failed to fetch papers: ${response.status} ${response.statusText}`);
         }
         
         const papers = await response.json();
@@ -202,15 +218,36 @@ async function fetchPapers() {
         filterPapers();
         
         // Populate tag filter buttons
-        populateTagFilterButtons();
+        if (tagFilterButtons) {
+            populateTagFilterButtons();
+        }
         
         // Update download tag buttons if on download tab
-        if (state.activeTab === 'download-tab') {
-            populateDownloadTagButtons();
+        if (state.activeTab === 'download-tab' && typeof populateTagSelector === 'function') {
+            populateTagSelector();
         }
     } catch (error) {
         console.error('Error fetching papers:', error);
-        papersContainer.innerHTML = `<div class="no-results">Error loading papers: ${error.message}</div>`;
+        if (papersContainer) {
+            papersContainer.innerHTML = `
+                <div class="alert alert-danger" role="alert">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Error loading papers: ${error.message}
+                </div>
+                <div class="text-center mt-3">
+                    <button class="btn btn-primary" onclick="fetchPapers()">
+                        <i class="fas fa-sync-alt me-1"></i> Try Again
+                    </button>
+                </div>
+            `;
+        }
+        
+        // Show toast notification if available
+        if (typeof showToast === 'function') {
+            showToast('Error', `Failed to load papers: ${error.message}`, 'danger');
+        } else if (typeof showAlert === 'function') {
+            showAlert(`Error loading papers: ${error.message}`, 'error');
+        }
     }
 }
 
@@ -303,14 +340,16 @@ function populateTagFilterButtons() {
 function updateButtonStates() {
     const hasSelection = state.selectedPapers.size > 0;
     
-    deleteSelectedButton.disabled = !hasSelection;
-    previewBibtexButton.disabled = !hasSelection;
-    copyBibtexButton.disabled = !hasSelection;
-    exportBibtexButton.disabled = !hasSelection;
+    if (deleteSelectedButton) deleteSelectedButton.disabled = !hasSelection;
+    if (copyBibtexButton) copyBibtexButton.disabled = !hasSelection;
+    if (exportBibtexButton) exportBibtexButton.disabled = !hasSelection;
+    if (previewBibtexButton) previewBibtexButton.disabled = !hasSelection;
 }
 
 // Update select all checkbox state
 function updateSelectAllState() {
+    if (!selectAllCheckbox) return;
+    
     if (state.filteredPapers.length === 0) {
         selectAllCheckbox.checked = false;
         selectAllCheckbox.disabled = true;
@@ -324,6 +363,11 @@ function updateSelectAllState() {
 
 // Render papers to the DOM
 function renderPapers() {
+    if (!papersContainer) {
+        console.error('Papers container element not found');
+        return;
+    }
+    
     if (state.filteredPapers.length === 0) {
         papersContainer.innerHTML = '<div class="no-results">No papers found matching your criteria</div>';
         return;
@@ -333,6 +377,11 @@ function renderPapers() {
     
     // Get the template
     const template = document.getElementById('paper-template');
+    if (!template) {
+        console.error('Paper template not found');
+        papersContainer.innerHTML = '<div class="alert alert-danger">Error: Paper template not found</div>';
+        return;
+    }
     
     state.filteredPapers.forEach(paper => {
         // Clone the template
@@ -340,101 +389,118 @@ function renderPapers() {
         
         // Set paper data
         const checkbox = paperElement.querySelector('.paper-checkbox');
-        checkbox.dataset.id = paper.id;
-        checkbox.checked = state.selectedPapers.has(paper.id);
+        if (checkbox) {
+            checkbox.dataset.id = paper.id;
+            checkbox.checked = state.selectedPapers.has(paper.id);
+        }
         
         const titleElement = paperElement.querySelector('.paper-title');
-        titleElement.textContent = paper.title;
-        
-        // Make title clickable to open arxiv website
-        titleElement.style.cursor = 'pointer';
-        titleElement.addEventListener('click', () => {
-            const arxivUrl = `https://arxiv.org/abs/${paper.arxivId || paper.id}`;
-            window.open(arxivUrl, '_blank');
-        });
+        if (titleElement) {
+            titleElement.textContent = paper.title;
+            
+            // Make title clickable to open arxiv website
+            titleElement.style.cursor = 'pointer';
+            titleElement.addEventListener('click', () => {
+                const arxivUrl = `https://arxiv.org/abs/${paper.arxivId || paper.id}`;
+                window.open(arxivUrl, '_blank');
+            });
+        }
         
         const authorsElement = paperElement.querySelector('.paper-authors');
-        if (Array.isArray(paper.authors)) {
-            authorsElement.textContent = paper.authors.join(', ');
-        } else if (typeof paper.authors === 'string') {
-            authorsElement.textContent = paper.authors;
+        if (authorsElement) {
+            if (Array.isArray(paper.authors)) {
+                authorsElement.textContent = paper.authors.join(', ');
+            } else if (typeof paper.authors === 'string') {
+                authorsElement.textContent = paper.authors;
+            }
         }
         
         // Set up meta information
         const metaElement = paperElement.querySelector('.paper-meta');
-        
-        // Date added
-        const dateElement = paperElement.querySelector('.paper-date');
-        if (paper.publishedDate) {
-            dateElement.textContent = `Published: ${new Date(paper.publishedDate).toLocaleDateString()}`;
-        } else if (paper.dateAdded) {
-            dateElement.textContent = `Added: ${new Date(paper.dateAdded).toLocaleDateString()}`;
-        }
-        
-        // ArXiv ID
-        paperElement.querySelector('.paper-id').textContent = `arXiv ID: ${paper.arxivId || paper.id}`;
-        
-        // Add tag to meta section
-        if (paper.tag) {
-            const tagElement = document.createElement('span');
-            tagElement.className = 'paper-tag';
-            tagElement.textContent = paper.tag;
-            metaElement.appendChild(tagElement);
-        }
-        
-        // Add subjects if available
-        if (paper.categories) {
-            const subjectsElement = document.createElement('span');
-            subjectsElement.className = 'paper-subjects';
-            subjectsElement.textContent = `Subjects: ${paper.categories}`;
-            metaElement.appendChild(subjectsElement);
+        if (metaElement) {
+            // Date added
+            const dateElement = paperElement.querySelector('.paper-date');
+            if (dateElement) {
+                if (paper.publishedDate) {
+                    dateElement.textContent = `Published: ${new Date(paper.publishedDate).toLocaleDateString()}`;
+                } else if (paper.dateAdded) {
+                    dateElement.textContent = `Added: ${new Date(paper.dateAdded).toLocaleDateString()}`;
+                }
+            }
+            
+            // ArXiv ID
+            const idElement = paperElement.querySelector('.paper-id');
+            if (idElement) {
+                idElement.textContent = `arXiv ID: ${paper.arxivId || paper.id}`;
+            }
+            
+            // Add tag to meta section
+            if (paper.tag) {
+                const tagElement = document.createElement('span');
+                tagElement.className = 'paper-tag';
+                tagElement.textContent = paper.tag;
+                metaElement.appendChild(tagElement);
+            }
+            
+            // Add subjects if available
+            if (paper.categories) {
+                const subjectsElement = document.createElement('span');
+                subjectsElement.className = 'paper-subjects';
+                subjectsElement.textContent = `Subjects: ${paper.categories}`;
+                metaElement.appendChild(subjectsElement);
+            }
         }
         
         // Set up action buttons
         const actionsContainer = paperElement.querySelector('.paper-actions');
-        
-        // Set up PDF button
-        const pdfButton = paperElement.querySelector('.view-pdf-button');
-        if (paper.localPdfPath) {
-            pdfButton.addEventListener('click', () => viewPdf(paper.id));
-        } else {
-            pdfButton.disabled = true;
-            pdfButton.title = 'PDF not available locally';
+        if (actionsContainer) {
+            // Set up PDF button
+            const pdfButton = paperElement.querySelector('.view-pdf-button');
+            if (pdfButton) {
+                if (paper.localPdfPath) {
+                    pdfButton.addEventListener('click', () => viewPdf(paper.id));
+                } else {
+                    pdfButton.disabled = true;
+                    pdfButton.title = 'PDF not available locally';
+                }
+            }
+            
+            // Set up source button
+            const sourceButton = paperElement.querySelector('.view-source-button');
+            if (sourceButton) {
+                if (paper.localSourcePath) {
+                    sourceButton.addEventListener('click', () => viewSource(paper.id));
+                } else {
+                    sourceButton.disabled = true;
+                    sourceButton.title = 'Source not available locally';
+                }
+            }
+            
+            // Add GitHub button
+            const githubButton = document.createElement('button');
+            githubButton.className = 'button-info';
+            githubButton.innerHTML = '<i class="fab fa-github"></i> GitHub';
+            
+            if (paper.githubUrl) {
+                // If GitHub URL exists, open the remote repository
+                githubButton.addEventListener('click', () => {
+                    window.open(paper.githubUrl, '_blank');
+                });
+            } else {
+                // If no GitHub URL, prompt user to enter one
+                githubButton.addEventListener('click', () => {
+                    promptGithubUrl(paper.id);
+                });
+            }
+            actionsContainer.appendChild(githubButton);
+            
+            // Add Open button (opens parent directory)
+            const openButton = document.createElement('button');
+            openButton.className = 'button-info';
+            openButton.innerHTML = '<i class="fas fa-folder-open"></i> Open';
+            openButton.addEventListener('click', () => openPaperDirectory(paper.id));
+            actionsContainer.appendChild(openButton);
         }
-        
-        // Set up source button
-        const sourceButton = paperElement.querySelector('.view-source-button');
-        if (paper.localSourcePath) {
-            sourceButton.addEventListener('click', () => viewSource(paper.id));
-        } else {
-            sourceButton.disabled = true;
-            sourceButton.title = 'Source not available locally';
-        }
-        
-        // Add GitHub button
-        const githubButton = document.createElement('button');
-        githubButton.className = 'button-info';
-        githubButton.innerHTML = '<i class="fab fa-github"></i> GitHub';
-        
-        if (paper.githubUrl) {
-            // If GitHub URL exists, open the remote repository
-            githubButton.addEventListener('click', () => {
-                window.open(paper.githubUrl, '_blank');
-            });
-        } else {
-            // If no GitHub URL, prompt user to enter one
-            githubButton.addEventListener('click', () => {
-                promptGithubUrl(paper.id);
-            });
-        }
-        actionsContainer.appendChild(githubButton);
-        
-        // Add Open button (opens parent directory)
-        const openButton = document.createElement('button');
-        openButton.className = 'button-info';
-        openButton.innerHTML = '<i class="fas fa-folder-open"></i> Open';
-        openButton.addEventListener('click', () => openPaperDirectory(paper.id));
-        actionsContainer.appendChild(openButton);
         
         // Add to container
         papersContainer.appendChild(paperElement);
@@ -509,7 +575,8 @@ async function deleteSelectedPapers() {
             throw new Error('Failed to delete papers');
         }
         
-        showAlert(`Successfully deleted ${state.selectedPapers.size} paper(s)`, 'success');
+        // Show success message
+        showToast('Success', `Successfully deleted ${state.selectedPapers.size} paper(s)`, 'success');
         
         // Clear selected papers
         state.selectedPapers.clear();
@@ -518,7 +585,7 @@ async function deleteSelectedPapers() {
         fetchPapers();
     } catch (error) {
         console.error('Error deleting papers:', error);
-        showAlert(`Error: ${error.message}`, 'error');
+        showToast('Error', `Failed to delete papers: ${error.message}`, 'danger');
     }
 }
 
@@ -535,14 +602,14 @@ function viewPdf(paperId) {
     })
     .then(data => {
         if (data.success) {
-            showAlert('Opening PDF...', 'success');
+            showToast('Success', 'Opening PDF...', 'success');
         } else {
             throw new Error(data.error || 'Unknown error');
         }
     })
     .catch(error => {
         console.error('Error opening PDF:', error);
-        showAlert(`Error: ${error.message}`, 'error');
+        showToast('Error', `Failed to open PDF: ${error.message}`, 'danger');
     });
 }
 
@@ -559,14 +626,14 @@ function viewSource(paperId) {
     })
     .then(data => {
         if (data.success) {
-            showAlert('Extracting and opening source files...', 'success');
+            showToast('Success', 'Extracting and opening source files...', 'success');
         } else {
             throw new Error(data.error || 'Unknown error');
         }
     })
     .catch(error => {
         console.error('Error extracting source:', error);
-        showAlert(`Error: ${error.message}`, 'error');
+        showToast('Error', `Failed to extract source: ${error.message}`, 'danger');
     });
 }
 
@@ -580,7 +647,7 @@ function promptGithubUrl(paperId) {
     
     // Validate URL format
     if (!githubUrl.startsWith('https://github.com/')) {
-        showAlert('Please enter a valid GitHub URL (https://github.com/...)', 'error');
+        showToast('Error', 'Please enter a valid GitHub URL (https://github.com/...)', 'danger');
         return;
     }
     
@@ -602,7 +669,7 @@ function promptGithubUrl(paperId) {
     })
     .then(data => {
         if (data.success) {
-            showAlert('GitHub URL saved. Cloning repository...', 'success');
+            showToast('Info', 'GitHub URL saved. Cloning repository...', 'info');
             
             // Now clone the repository
             return fetch(`/api/github/clone/${paperId}`, {
@@ -620,7 +687,7 @@ function promptGithubUrl(paperId) {
     })
     .then(data => {
         if (data.success) {
-            showAlert('GitHub repository cloned successfully!', 'success');
+            showToast('Success', 'GitHub repository cloned successfully!', 'success');
             // Refresh papers to update UI
             fetchPapers();
         } else {
@@ -629,8 +696,41 @@ function promptGithubUrl(paperId) {
     })
     .catch(error => {
         console.error('Error handling GitHub URL:', error);
-        showAlert(`Error: ${error.message}`, 'error');
+        showToast('Error', `Failed to process GitHub URL: ${error.message}`, 'danger');
     });
+}
+
+// Show toast notification
+function showToast(title, message, type = 'info') {
+    const toastContainer = document.querySelector('.toast-container');
+    if (!toastContainer) return;
+    
+    const toastId = 'toast-' + Date.now();
+    
+    const toastHTML = `
+        <div id="${toastId}" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+                <strong class="me-auto">${title}</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body">
+                ${message}
+            </div>
+        </div>
+    `;
+    
+    toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+    
+    const toastElement = document.getElementById(toastId);
+    if (toastElement) {
+        const toast = new bootstrap.Toast(toastElement, { autohide: true, delay: 3000 });
+        toast.show();
+        
+        // Remove toast from DOM after it's hidden
+        toastElement.addEventListener('hidden.bs.toast', () => {
+            toastElement.remove();
+        });
+    }
 }
 
 // Initialize
@@ -639,13 +739,20 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchPapers();
     
     // Event listeners
-    searchInput.addEventListener('input', () => {
-        state.currentFilter.searchText = searchInput.value.trim();
-        filterPapers();
-    });
+    if (searchInput) {
+        searchInput.addEventListener('input', () => {
+            state.currentFilter.searchText = searchInput.value.trim();
+            filterPapers();
+        });
+    }
     
-    selectAllCheckbox.addEventListener('change', handleSelectAll);
-    deleteSelectedButton.addEventListener('click', deleteSelectedPapers);
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', handleSelectAll);
+    }
+    
+    if (deleteSelectedButton) {
+        deleteSelectedButton.addEventListener('click', deleteSelectedPapers);
+    }
     
     // Open knowledge base button
     if (openKnowledgeBaseButton) {

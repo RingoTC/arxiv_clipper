@@ -304,7 +304,6 @@ function updateButtonStates() {
     const hasSelection = state.selectedPapers.size > 0;
     
     deleteSelectedButton.disabled = !hasSelection;
-    previewBibtexButton.disabled = !hasSelection;
     copyBibtexButton.disabled = !hasSelection;
     exportBibtexButton.disabled = !hasSelection;
 }
