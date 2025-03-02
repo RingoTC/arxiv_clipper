@@ -46,34 +46,46 @@ async function getPaperMetadata(arxivId) {
     try {
         const response = await axios_1.default.get(apiUrl);
         const xml = response.data;
-        // Extract title - handle multiple title tags by finding the one after "entry"
+        // Extract title - improved regex to handle different formats
         let title = '';
-        const entryTitleMatch = xml.match(/<entry>[\s\S]*?<title>(.*?)<\/title>/);
-        if (entryTitleMatch) {
-            title = entryTitleMatch[1].replace('Title:', '').trim();
+        const entryTitleMatch = xml.match(/<entry>[\s\S]*?<title>([\s\S]*?)<\/title>/);
+        if (entryTitleMatch && entryTitleMatch[1]) {
+            title = entryTitleMatch[1].replace(/Title:\s*/i, '').trim();
         }
         else {
-            const titleMatch = xml.match(/<title>(.*?)<\/title>/);
-            title = titleMatch ? titleMatch[1].replace('Title:', '').trim() : 'Untitled';
+            const titleMatch = xml.match(/<title>([\s\S]*?)<\/title>/);
+            title = titleMatch && titleMatch[1] ? titleMatch[1].replace(/Title:\s*/i, '').trim() : 'Untitled';
         }
         // Improved author extraction
         const authorMatches = xml.match(/<author>([\s\S]*?)<\/author>/g);
         const authors = [];
         if (authorMatches) {
             authorMatches.forEach((authorXml) => {
-                // Try to extract name from <n> tag first (newer format)
-                const nameMatch = authorXml.match(/<n>(.*?)<\/name>/);
+                // Try to extract name from <name> tag (standard format)
+                const nameMatch = authorXml.match(/<name>(.*?)<\/name>/);
                 if (nameMatch && nameMatch[1]) {
                     authors.push(nameMatch[1].trim());
                 }
                 else {
-                    // Try to extract from <n> tag (older format)
-                    const nMatch = authorXml.match(/<n>(.*?)<\/n>/);
+                    // Try to extract from <name> tag (older format)
+                    const nMatch = authorXml.match(/<name>(.*?)<\/name>/);
                     if (nMatch && nMatch[1]) {
                         authors.push(nMatch[1].trim());
                     }
                 }
             });
+        }
+        // If no authors were found, try alternative extraction method
+        if (authors.length === 0) {
+            const nameMatches = xml.match(/<name>(.*?)<\/name>/g);
+            if (nameMatches) {
+                nameMatches.forEach((nameXml) => {
+                    const nameContent = nameXml.match(/<name>(.*?)<\/name>/);
+                    if (nameContent && nameContent[1]) {
+                        authors.push(nameContent[1].trim());
+                    }
+                });
+            }
         }
         // Extract abstract
         const abstractMatch = xml.match(/<summary>([\s\S]*?)<\/summary>/);

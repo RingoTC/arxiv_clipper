@@ -11,7 +11,21 @@ async function listPapers(keywords, options) {
         // Set default values for pagination
         const page = options.page || 1;
         const pageSize = options.pageSize || 10;
-        const result = await Paper_1.paperDB.searchPapers(keywords, options.tag, page, pageSize);
+        console.log(`Filtering by tag: ${options.tag || 'none'}`);
+        let result;
+        if (keywords && keywords.length > 0) {
+            // If keywords are provided, use searchPapers
+            result = await Paper_1.paperDB.searchPapers(keywords, options.tag, page, pageSize);
+        }
+        else if (options.tag) {
+            // If only tag is provided, use getByTagPaginated
+            console.log(`Using getByTagPaginated with tag: ${options.tag}`);
+            result = await Paper_1.paperDB.getByTagPaginated(options.tag, page, pageSize);
+        }
+        else {
+            // If no filters, get all papers
+            result = await Paper_1.paperDB.getAllPaginated(page, pageSize);
+        }
         const { papers, total } = result;
         if (papers.length === 0) {
             console.log(chalk_1.default.yellow('No papers found.'));

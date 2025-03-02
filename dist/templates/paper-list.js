@@ -266,13 +266,27 @@ async function fetchPapers() {
             params.append('tag', state.currentFilter.tag);
         }
         
+        console.log('Fetching papers with params:', params.toString());
+        
         const response = await fetch(`/api/papers?${params.toString()}`);
         
         if (!response.ok) {
             throw new Error(`Failed to fetch papers: ${response.status} ${response.statusText}`);
         }
         
-        const data = await response.json();
+        // Get response text first to check for issues
+        const responseText = await response.text();
+        console.log('Response size:', responseText.length);
+        
+        // Try to parse the JSON
+        let data;
+        try {
+            data = JSON.parse(responseText);
+        } catch (parseError) {
+            console.error('JSON parse error:', parseError);
+            console.error('Response text preview:', responseText.substring(0, 200) + '...');
+            throw new Error(`Failed to parse response: ${parseError.message}`);
+        }
         
         // Update state
         state.papers = data.papers;

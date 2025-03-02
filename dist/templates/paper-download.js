@@ -384,5 +384,5 @@ document.addEventListener('DOMContentLoaded', () => {
     downloadButton.addEventListener('click', downloadPaper);
     
     // Add event listener to refresh tag selector periodically
-    setInterval(populateTagSelector, 5000); // Refresh every 5 seconds
+    // setInterval(populateTagSelector, 5000); // Refresh every 5 seconds
 }); 

@@ -168,6 +168,9 @@ export const paperDB = {
       query += ' LIMIT ? OFFSET ?';
       params.push(pageSize.toString(), offset.toString());
       
+      console.log('Executing query:', query);
+      console.log('With params:', params);
+      
       // First get the total count
       db.get(countQuery, countParams, (countErr: Error | null, countRow: any) => {
         if (countErr) {

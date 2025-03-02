@@ -155,3 +155,40 @@ This will add the necessary columns to your database to support GitHub repositor
 ## License
 
 MIT
+
+## Development
+
+### Testing
+
+The project uses Jest for unit testing. To run the tests:
+
+```bash
+# Run all tests
+npm test
+
+# Run tests in watch mode (for development)
+npm run test:watch
+
+# Run tests with coverage report
+npm run test:coverage
+```
+
+### Building
+
+To build the project:
+
+```bash
+npm run build
+```
+
+This will compile TypeScript files and copy template files to the dist directory.
+
+### Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Write tests for your changes
+4. Ensure all tests pass (`npm test`)
+5. Commit your changes (`git commit -m 'Add some amazing feature'`)
+6. Push to the branch (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
