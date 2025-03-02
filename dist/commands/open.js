@@ -9,41 +9,49 @@ const Paper_1 = require("../models/Paper");
 const chalk_1 = __importDefault(require("chalk"));
 const path_1 = __importDefault(require("path"));
 const open_1 = __importDefault(require("open"));
-const fs_extra_1 = __importDefault(require("fs-extra"));
-async function openPaperDirectory(arxivId) {
+const os_1 = require("os");
+async function openPaperDirectory(id, options = {}) {
     try {
-        // Get paper from database
-        const papers = await Paper_1.paperDB.searchPapers(arxivId);
-        if (papers.length === 0) {
-            console.error(chalk_1.default.red(`Paper with ID ${arxivId} not found.`));
+        // Search for the paper
+        const result = await Paper_1.paperDB.searchPapers(id);
+        if (result.papers.length === 0) {
+            console.log(chalk_1.default.yellow(`No paper found with ID: ${id}`));
             return;
         }
-        const paper = papers[0];
-        // Open the parent directory containing all files
-        if (paper.localPdfPath) {
-            const pathToOpen = path_1.default.dirname(paper.localPdfPath);
-            console.log(chalk_1.default.green(`Opening directory for ${paper.title}...`));
-            await (0, open_1.default)(pathToOpen, { wait: false });
+        const paper = result.papers[0];
+        let dirToOpen;
+        if (options.source && paper.localSourcePath) {
+            // Open source directory
+            dirToOpen = paper.localSourcePath;
+            console.log(chalk_1.default.green(`Opening source directory for paper: ${paper.title}`));
+        }
+        else if (options.github && paper.localGithubPath) {
+            // Open GitHub repository directory
+            dirToOpen = paper.localGithubPath;
+            console.log(chalk_1.default.green(`Opening GitHub repository for paper: ${paper.title}`));
+        }
+        else if (paper.localPdfPath) {
+            // Open parent directory
+            dirToOpen = path_1.default.dirname(paper.localPdfPath);
+            console.log(chalk_1.default.green(`Opening directory for paper: ${paper.title}`));
         }
         else {
-            console.error(chalk_1.default.red(`No local files found for paper ${paper.title}.`));
+            console.log(chalk_1.default.yellow(`No local files found for paper: ${paper.title}`));
             return;
         }
+        // Open the directory
+        await (0, open_1.default)(dirToOpen);
     }
     catch (error) {
-        console.error(chalk_1.default.red('Failed to open directory:'), error);
+        console.error(chalk_1.default.red('Failed to open paper directory:'), error);
     }
 }
 // Open the entire knowledge base
 async function openKnowledgeBase() {
     try {
-        const knowledgeBasePath = path_1.default.join(process.env.HOME || process.env.USERPROFILE || '', 'Development', 'arxiv');
-        if (!fs_extra_1.default.existsSync(knowledgeBasePath)) {
-            console.error(chalk_1.default.red(`Knowledge base directory not found at ${knowledgeBasePath}.`));
-            return;
-        }
-        console.log(chalk_1.default.green(`Opening arXiv knowledge base...`));
-        await (0, open_1.default)(knowledgeBasePath, { wait: false });
+        const kbPath = path_1.default.join((0, os_1.homedir)(), '.arxiv-downloader', 'papers');
+        console.log(chalk_1.default.green(`Opening knowledge base at: ${kbPath}`));
+        await (0, open_1.default)(kbPath);
     }
     catch (error) {
         console.error(chalk_1.default.red('Failed to open knowledge base:'), error);
@@ -51,14 +59,21 @@ async function openKnowledgeBase() {
 }
 const openCommand = (program) => {
     program
-        .command('open <arxivId>')
-        .description('Open the directory containing paper files')
-        .action((arxivId) => {
-        openPaperDirectory(arxivId);
+        .command('open [id]')
+        .description('Open the directory containing a paper')
+        .option('-s, --source', 'Open the LaTeX source directory')
+        .option('-g, --github', 'Open the GitHub repository directory')
+        .action((id, options) => {
+        if (id) {
+            openPaperDirectory(id, options);
+        }
+        else {
+            console.log(chalk_1.default.yellow('Please provide a paper ID.'));
+        }
     });
     program
         .command('open-kb')
-        .description('Open the entire arXiv knowledge base directory')
+        .description('Open the knowledge base directory')
         .action(() => {
         openKnowledgeBase();
     });

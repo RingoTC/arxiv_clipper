@@ -1,4 +1,3 @@
-// DOM Elements
 const papersContainer = document.getElementById('papers-container');
 const searchInput = document.getElementById('search-input');
 const tagFilterButtons = document.getElementById('tag-filter-buttons');
@@ -10,6 +9,18 @@ const copyBibtexButton = document.getElementById('copy-button');
 const exportBibtexButton = document.getElementById('export-button');
 // Note: preview-button may not exist in arxiv-manager.html
 const previewBibtexButton = document.getElementById('preview-button');
+// Pagination elements
+const paginationContainer = document.getElementById('pagination-container');
+const pageSizeSelect = document.getElementById('page-size-select');
+
+// Extend the existing state object from common.js with pagination properties
+// instead of redeclaring it
+state.pagination = {
+    page: 1,
+    pageSize: 10,
+    total: 0,
+    totalPages: 0
+};
 
 // Paper list styles
 const paperListStyles = document.createElement('style');
@@ -182,6 +193,48 @@ paperListStyles.textContent = `
 `;
 document.head.appendChild(paperListStyles);
 
+// Debounce function to limit how often a function can be called
+function debounce(func, wait) {
+    let timeout;
+    return function() {
+        const context = this;
+        const args = arguments;
+        clearTimeout(timeout);
+        timeout = setTimeout(() => {
+            func.apply(context, args);
+        }, wait);
+    };
+}
+
+// BibTeX related functions - these check if the actual functions exist in the global scope
+// These are likely defined in bibtex-export.js
+function copySelectedBibtex() {
+    if (typeof copyBibTeX === 'function') {
+        copyBibTeX();
+    } else {
+        console.error('copyBibTeX function not found. Make sure bibtex-export.js is loaded.');
+        showToast('Error', 'BibTeX functionality not available', 'danger');
+    }
+}
+
+function exportSelectedBibtex() {
+    if (typeof exportBibTeX === 'function') {
+        exportBibTeX();
+    } else {
+        console.error('exportBibTeX function not found. Make sure bibtex-export.js is loaded.');
+        showToast('Error', 'BibTeX functionality not available', 'danger');
+    }
+}
+
+function previewSelectedBibtex() {
+    if (typeof previewBibTeX === 'function') {
+        previewBibTeX();
+    } else {
+        console.error('previewBibTeX function not found. Make sure bibtex-export.js is loaded.');
+        showToast('Error', 'BibTeX functionality not available', 'danger');
+    }
+}
+
 // Fetch papers from API
 async function fetchPapers() {
     try {
@@ -200,32 +253,43 @@ async function fetchPapers() {
             </div>
         `;
         
-        const response = await fetch('/api/papers');
+        // Build query parameters
+        const params = new URLSearchParams();
+        params.append('page', state.pagination.page);
+        params.append('pageSize', state.pagination.pageSize);
+        
+        if (state.currentFilter.searchText) {
+            params.append('search', state.currentFilter.searchText);
+        }
+        
+        if (state.currentFilter.tag) {
+            params.append('tag', state.currentFilter.tag);
+        }
+        
+        const response = await fetch(`/api/papers?${params.toString()}`);
         
         if (!response.ok) {
             throw new Error(`Failed to fetch papers: ${response.status} ${response.statusText}`);
         }
         
-        const papers = await response.json();
+        const data = await response.json();
         
         // Update state
-        state.papers = papers;
+        state.papers = data.papers;
+        state.filteredPapers = data.papers;
+        state.pagination = data.pagination;
         
-        // Extract tags
-        state.tags = new Set(papers.map(paper => paper.tag || 'default').filter(Boolean));
+        // Extract tags (we need to fetch all tags separately)
+        fetchAllTags();
         
-        // Apply current filter
-        filterPapers();
+        // Render papers
+        renderPapers();
         
-        // Populate tag filter buttons
-        if (tagFilterButtons) {
-            populateTagFilterButtons();
-        }
+        // Render pagination
+        renderPagination();
         
-        // Update download tag buttons if on download tab
-        if (state.activeTab === 'download-tab' && typeof populateTagSelector === 'function') {
-            populateTagSelector();
-        }
+        // Update button states
+        updateButtonStates();
     } catch (error) {
         console.error('Error fetching papers:', error);
         if (papersContainer) {
@@ -248,6 +312,34 @@ async function fetchPapers() {
         } else if (typeof showAlert === 'function') {
             showAlert(`Error loading papers: ${error.message}`, 'error');
         }
+    }
+}
+
+// Fetch all tags for the filter
+async function fetchAllTags() {
+    try {
+        const response = await fetch('/api/tags');
+        
+        if (!response.ok) {
+            throw new Error(`Failed to fetch tags: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        // Update state
+        state.tags = new Set(data.tags);
+        
+        // Populate tag filter buttons
+        if (tagFilterButtons) {
+            populateTagFilterButtons();
+        }
+        
+        // Update download tag buttons if on download tab
+        if (state.activeTab === 'download-tab' && typeof populateTagSelector === 'function') {
+            populateTagSelector();
+        }
+    } catch (error) {
+        console.error('Error fetching tags:', error);
     }
 }
 
@@ -733,29 +825,222 @@ function showToast(title, message, type = 'info') {
     }
 }
 
-// Initialize
-document.addEventListener('DOMContentLoaded', () => {
-    // Fetch papers
-    fetchPapers();
+// Render pagination controls
+function renderPagination() {
+    if (!paginationContainer) return;
     
-    // Event listeners
-    if (searchInput) {
-        searchInput.addEventListener('input', () => {
-            state.currentFilter.searchText = searchInput.value.trim();
-            filterPapers();
-        });
+    const { page, pageSize, total, totalPages } = state.pagination;
+    
+    if (total === 0) {
+        paginationContainer.innerHTML = '';
+        return;
     }
     
+    const startItem = (page - 1) * pageSize + 1;
+    const endItem = Math.min(page * pageSize, total);
+    
+    let paginationHTML = `
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="pagination-info">
+                Showing ${startItem}-${endItem} of ${total} papers
+            </div>
+            <div class="d-flex align-items-center">
+                <div class="me-3">
+                    <select id="page-size-select" class="form-select form-select-sm">
+                        <option value="10" ${pageSize === 10 ? 'selected' : ''}>10 per page</option>
+                        <option value="25" ${pageSize === 25 ? 'selected' : ''}>25 per page</option>
+                        <option value="50" ${pageSize === 50 ? 'selected' : ''}>50 per page</option>
+                        <option value="100" ${pageSize === 100 ? 'selected' : ''}>100 per page</option>
+                    </select>
+                </div>
+                <nav aria-label="Paper pagination">
+                    <ul class="pagination pagination-sm mb-0">
+    `;
+    
+    // Previous button
+    paginationHTML += `
+        <li class="page-item ${page === 1 ? 'disabled' : ''}">
+            <a class="page-link" href="#" data-page="${page - 1}" aria-label="Previous">
+                <span aria-hidden="true">&laquo;</span>
+            </a>
+        </li>
+    `;
+    
+    // Page numbers
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, page - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+    
+    // Adjust if we're near the end
+    if (endPage - startPage + 1 < maxVisiblePages) {
+        startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+    
+    // First page if not visible
+    if (startPage > 1) {
+        paginationHTML += `
+            <li class="page-item">
+                <a class="page-link" href="#" data-page="1">1</a>
+            </li>
+        `;
+        
+        if (startPage > 2) {
+            paginationHTML += `
+                <li class="page-item disabled">
+                    <a class="page-link" href="#">...</a>
+                </li>
+            `;
+        }
+    }
+    
+    // Page numbers
+    for (let i = startPage; i <= endPage; i++) {
+        paginationHTML += `
+            <li class="page-item ${i === page ? 'active' : ''}">
+                <a class="page-link" href="#" data-page="${i}">${i}</a>
+            </li>
+        `;
+    }
+    
+    // Last page if not visible
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            paginationHTML += `
+                <li class="page-item disabled">
+                    <a class="page-link" href="#">...</a>
+                </li>
+            `;
+        }
+        
+        paginationHTML += `
+            <li class="page-item">
+                <a class="page-link" href="#" data-page="${totalPages}">${totalPages}</a>
+            </li>
+        `;
+    }
+    
+    // Next button
+    paginationHTML += `
+        <li class="page-item ${page === totalPages ? 'disabled' : ''}">
+            <a class="page-link" href="#" data-page="${page + 1}" aria-label="Next">
+                <span aria-hidden="true">&raquo;</span>
+            </a>
+        </li>
+    `;
+    
+    paginationHTML += `
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    `;
+    
+    paginationContainer.innerHTML = paginationHTML;
+    
+    // Add event listeners
+    document.querySelectorAll('.page-link[data-page]').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const newPage = parseInt(e.currentTarget.dataset.page, 10);
+            if (newPage !== state.pagination.page) {
+                state.pagination.page = newPage;
+                fetchPapers();
+            }
+        });
+    });
+    
+    // Page size change event
+    const pageSizeSelect = document.getElementById('page-size-select');
+    if (pageSizeSelect) {
+        pageSizeSelect.addEventListener('change', (e) => {
+            state.pagination.pageSize = parseInt(e.target.value, 10);
+            state.pagination.page = 1; // Reset to first page
+            fetchPapers();
+        });
+    }
+}
+
+// Filter papers by tag
+function filterByTag(tag) {
+    state.currentFilter.tag = tag === 'all' ? null : tag;
+    state.pagination.page = 1; // Reset to first page
+    fetchPapers();
+    
+    // Update active tag button
+    if (tagFilterButtons) {
+        const buttons = tagFilterButtons.querySelectorAll('.tag-button');
+        buttons.forEach(button => {
+            button.classList.toggle('active', button.dataset.tag === tag);
+        });
+    }
+}
+
+// Search papers
+function searchPapers() {
+    state.currentFilter.searchText = searchInput.value.trim();
+    state.pagination.page = 1; // Reset to first page
+    fetchPapers();
+}
+
+// Initialize event listeners
+function initEventListeners() {
+    // Search input
+    if (searchInput) {
+        searchInput.addEventListener('input', debounce(() => {
+            searchPapers();
+        }, 300));
+    }
+    
+    // Select all checkbox
     if (selectAllCheckbox) {
         selectAllCheckbox.addEventListener('change', handleSelectAll);
     }
     
+    // Delete selected button
     if (deleteSelectedButton) {
         deleteSelectedButton.addEventListener('click', deleteSelectedPapers);
     }
     
     // Open knowledge base button
     if (openKnowledgeBaseButton) {
-        openKnowledgeBaseButton.addEventListener('click', openKnowledgeBase);
+        openKnowledgeBaseButton.addEventListener('click', () => {
+            fetch('/api/open-kb')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast('Success', 'Knowledge base opened', 'success');
+                    } else {
+                        showToast('Error', data.error || 'Failed to open knowledge base', 'danger');
+                    }
+                })
+                .catch(error => {
+                    showToast('Error', `Failed to open knowledge base: ${error.message}`, 'danger');
+                });
+        });
     }
+    
+    // BibTeX buttons
+    if (copyBibtexButton) {
+        copyBibtexButton.addEventListener('click', copySelectedBibtex);
+    }
+    
+    if (exportBibtexButton) {
+        exportBibtexButton.addEventListener('click', exportSelectedBibtex);
+    }
+    
+    if (previewBibtexButton) {
+        previewBibtexButton.addEventListener('click', previewSelectedBibtex);
+    }
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    // Initialize state
+    state.activeTab = 'list-tab';
+    
+    // Initialize event listeners
+    initEventListeners();
+    
+    // Fetch papers
+    fetchPapers();
 }); 

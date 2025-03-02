@@ -25,6 +25,12 @@ export interface Paper {
   arxivId?: string;
 }
 
+export interface PaginatedResult<T> {
+  papers: T[];
+  total: number;
+  length?: number;
+}
+
 export interface Database {
   papers: Paper[];
 }
@@ -35,6 +41,8 @@ export interface CommandOptions {
   output?: string;
   all?: boolean;
   github?: string;
+  page?: number;
+  pageSize?: number;
 }
 
 export type CommandFunction = (program: Command) => void; 

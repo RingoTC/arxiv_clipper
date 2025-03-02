@@ -4,40 +4,65 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.openPdf = openPdf;
+exports.openPdfInteractive = openPdfInteractive;
 const Paper_1 = require("../models/Paper");
-const inquirer_1 = __importDefault(require("inquirer"));
 const chalk_1 = __importDefault(require("chalk"));
-const child_process_1 = require("child_process");
-async function openPdf(keywords, options) {
+const inquirer_1 = __importDefault(require("inquirer"));
+const open_1 = __importDefault(require("open"));
+async function openPdf(id) {
     try {
-        console.log('Searching for papers with keywords:', keywords);
-        const papers = await Paper_1.paperDB.searchPapers(keywords);
-        console.log('Search results:', papers);
-        if (papers.length === 0) {
+        // Search for the paper
+        const result = await Paper_1.paperDB.searchPapers(id);
+        if (result.papers.length === 0) {
+            console.log(chalk_1.default.yellow(`No paper found with ID: ${id}`));
+            return;
+        }
+        const paper = result.papers[0];
+        if (!paper.localPdfPath) {
+            console.log(chalk_1.default.yellow(`No PDF found for paper: ${paper.title}`));
+            return;
+        }
+        // Open the PDF
+        console.log(chalk_1.default.green(`Opening PDF for paper: ${paper.title}`));
+        await (0, open_1.default)(paper.localPdfPath);
+    }
+    catch (error) {
+        console.error(chalk_1.default.red('Failed to open PDF:'), error);
+    }
+}
+async function openPdfInteractive() {
+    try {
+        // Get all papers
+        const result = await Paper_1.paperDB.getAllPaginated(1, 1000); // Get a large number of papers
+        if (result.papers.length === 0) {
             console.log(chalk_1.default.yellow('No papers found.'));
             return;
         }
-        const choices = papers.map((paper, index) => ({
-            name: `${index + 1}. ${paper.title} (${paper.arxivId || paper.id})`,
-            value: paper.localPdfPath || paper.pdfPath
+        // Create choices for inquirer
+        const choices = result.papers.map((paper, index) => ({
+            name: `${index + 1}. ${paper.title} (${paper.id})`,
+            value: paper.id
         }));
-        const { selectedPdf } = await inquirer_1.default.prompt([{
+        // Add a "Cancel" option
+        choices.push({
+            name: 'Cancel',
+            value: 'cancel'
+        });
+        // Prompt user to select a paper
+        const { selectedPaper } = await inquirer_1.default.prompt([
+            {
                 type: 'list',
-                name: 'selectedPdf',
-                message: 'Select a paper to open PDF:',
-                choices,
-                default: choices[0].value
-            }]);
-        if (!selectedPdf) {
-            console.log(chalk_1.default.yellow('No PDF selected.'));
+                name: 'selectedPaper',
+                message: 'Select a paper to open:',
+                choices
+            }
+        ]);
+        if (selectedPaper === 'cancel') {
+            console.log(chalk_1.default.blue('Operation cancelled.'));
             return;
         }
-        // Open PDF with default application
-        (0, child_process_1.exec)(`open "${selectedPdf}"`, (error) => {
-            if (error) {
-                console.error(chalk_1.default.red('Failed to open PDF:'), error);
-            }
-        });
+        // Open the selected paper
+        await openPdf(selectedPaper);
     }
     catch (error) {
         console.error(chalk_1.default.red('Failed to open PDF:'), error);
@@ -45,11 +70,15 @@ async function openPdf(keywords, options) {
 }
 const pdfCommand = (program) => {
     program
-        .command('pdf [keywords...]')
+        .command('pdf [id]')
         .description('Open a paper PDF')
-        .option('-t, --tag <tag>', 'Filter papers by tag')
-        .action((keywords, options) => {
-        openPdf(keywords, options);
+        .action((id) => {
+        if (id) {
+            openPdf(id);
+        }
+        else {
+            openPdfInteractive();
+        }
     });
 };
 exports.default = pdfCommand;

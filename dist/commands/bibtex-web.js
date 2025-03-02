@@ -38,11 +38,61 @@ const webCommand = (program) => {
                 // API endpoints
                 if (req.url?.startsWith('/api/')) {
                     // Get papers list
-                    if (req.url === '/api/papers' && req.method === 'GET') {
+                    if (req.url?.startsWith('/api/papers') && req.method === 'GET') {
                         try {
-                            const papers = await Paper_1.paperDB.getAll();
+                            // Parse query parameters for pagination
+                            const url = new URL(req.url, `http://${req.headers.host}`);
+                            const page = parseInt(url.searchParams.get('page') || '1', 10);
+                            const pageSize = parseInt(url.searchParams.get('pageSize') || '10', 10);
+                            const tag = url.searchParams.get('tag') || undefined;
+                            const search = url.searchParams.get('search') || undefined;
+                            let result;
+                            if (search) {
+                                // Search with keywords
+                                result = await Paper_1.paperDB.searchPapers(search, tag, page, pageSize);
+                            }
+                            else if (tag) {
+                                // Filter by tag
+                                result = await Paper_1.paperDB.getByTagPaginated(tag, page, pageSize);
+                            }
+                            else {
+                                // Get all papers
+                                result = await Paper_1.paperDB.getAllPaginated(page, pageSize);
+                            }
+                            // Add pagination metadata
+                            const response = {
+                                papers: result.papers,
+                                pagination: {
+                                    total: result.total,
+                                    page,
+                                    pageSize,
+                                    totalPages: Math.ceil(result.total / pageSize)
+                                }
+                            };
                             res.setHeader('Content-Type', 'application/json');
-                            res.end(JSON.stringify(papers));
+                            res.end(JSON.stringify(response));
+                        }
+                        catch (error) {
+                            res.statusCode = 500;
+                            res.setHeader('Content-Type', 'application/json');
+                            res.end(JSON.stringify({ error: error.message }));
+                        }
+                        return;
+                    }
+                    // Get all tags
+                    if (req.url === '/api/tags' && req.method === 'GET') {
+                        try {
+                            // Get all papers to extract tags
+                            const result = await Paper_1.paperDB.getAllPaginated(1, 1000); // Get a large number of papers to extract tags
+                            // Extract unique tags
+                            const tags = new Set();
+                            result.papers.forEach(paper => {
+                                if (paper.tag) {
+                                    tags.add(paper.tag);
+                                }
+                            });
+                            res.setHeader('Content-Type', 'application/json');
+                            res.end(JSON.stringify({ tags: Array.from(tags) }));
                         }
                         catch (error) {
                             res.statusCode = 500;
@@ -90,14 +140,14 @@ const webCommand = (program) => {
                             try {
                                 const { githubUrl } = JSON.parse(body);
                                 // Get paper
-                                const papers = await Paper_1.paperDB.searchPapers(paperId);
-                                if (papers.length === 0) {
+                                const result = await Paper_1.paperDB.searchPapers(paperId);
+                                if (result.papers.length === 0) {
                                     res.statusCode = 404;
                                     res.setHeader('Content-Type', 'application/json');
                                     res.end(JSON.stringify({ error: 'Paper not found' }));
                                     return;
                                 }
-                                const paper = papers[0];
+                                const paper = result.papers[0];
                                 // Update paper
                                 paper.githubUrl = githubUrl;
                                 // Save to database
@@ -119,14 +169,14 @@ const webCommand = (program) => {
                         const paperId = req.url.replace('/api/github/clone/', '');
                         try {
                             // Get paper
-                            const papers = await Paper_1.paperDB.searchPapers(paperId);
-                            if (papers.length === 0) {
+                            const result = await Paper_1.paperDB.searchPapers(paperId);
+                            if (result.papers.length === 0) {
                                 res.statusCode = 404;
                                 res.setHeader('Content-Type', 'application/json');
                                 res.end(JSON.stringify({ error: 'Paper not found' }));
                                 return;
                             }
-                            const paper = papers[0];
+                            const paper = result.papers[0];
                             if (!paper.githubUrl) {
                                 res.statusCode = 400;
                                 res.setHeader('Content-Type', 'application/json');
@@ -273,7 +323,7 @@ const webCommand = (program) => {
                         }
                         return;
                     }
-                    // 404 for unknown API endpoints
+                    // If no API endpoint matched
                     res.statusCode = 404;
                     res.setHeader('Content-Type', 'application/json');
                     res.end(JSON.stringify({ error: 'API endpoint not found' }));

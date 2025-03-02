@@ -1,49 +1,56 @@
 import { Command } from 'commander';
-import { CommandFunction } from '../types';
+import { CommandFunction, Paper, PaginatedResult } from '../types';
 import { paperDB } from '../models/Paper';
 import chalk from 'chalk';
 import path from 'path';
 import open from 'open';
 import fs from 'fs-extra';
+import { homedir } from 'os';
 
-export async function openPaperDirectory(arxivId: string) {
+export async function openPaperDirectory(id: string, options: { source?: boolean; github?: boolean } = {}) {
   try {
-    // Get paper from database
-    const papers = await paperDB.searchPapers(arxivId);
+    // Search for the paper
+    const result = await paperDB.searchPapers(id);
     
-    if (papers.length === 0) {
-      console.error(chalk.red(`Paper with ID ${arxivId} not found.`));
+    if (result.papers.length === 0) {
+      console.log(chalk.yellow(`No paper found with ID: ${id}`));
       return;
     }
     
-    const paper = papers[0];
+    const paper = result.papers[0];
     
-    // Open the parent directory containing all files
-    if (paper.localPdfPath) {
-      const pathToOpen = path.dirname(paper.localPdfPath);
-      console.log(chalk.green(`Opening directory for ${paper.title}...`));
-      await open(pathToOpen, { wait: false });
+    let dirToOpen;
+    
+    if (options.source && paper.localSourcePath) {
+      // Open source directory
+      dirToOpen = paper.localSourcePath;
+      console.log(chalk.green(`Opening source directory for paper: ${paper.title}`));
+    } else if (options.github && paper.localGithubPath) {
+      // Open GitHub repository directory
+      dirToOpen = paper.localGithubPath;
+      console.log(chalk.green(`Opening GitHub repository for paper: ${paper.title}`));
+    } else if (paper.localPdfPath) {
+      // Open parent directory
+      dirToOpen = path.dirname(paper.localPdfPath);
+      console.log(chalk.green(`Opening directory for paper: ${paper.title}`));
     } else {
-      console.error(chalk.red(`No local files found for paper ${paper.title}.`));
+      console.log(chalk.yellow(`No local files found for paper: ${paper.title}`));
       return;
     }
+    
+    // Open the directory
+    await open(dirToOpen);
   } catch (error) {
-    console.error(chalk.red('Failed to open directory:'), error);
+    console.error(chalk.red('Failed to open paper directory:'), error);
   }
 }
 
 // Open the entire knowledge base
 export async function openKnowledgeBase() {
   try {
-    const knowledgeBasePath = path.join(process.env.HOME || process.env.USERPROFILE || '', 'Development', 'arxiv');
-    
-    if (!fs.existsSync(knowledgeBasePath)) {
-      console.error(chalk.red(`Knowledge base directory not found at ${knowledgeBasePath}.`));
-      return;
-    }
-    
-    console.log(chalk.green(`Opening arXiv knowledge base...`));
-    await open(knowledgeBasePath, { wait: false });
+    const kbPath = path.join(homedir(), '.arxiv-downloader', 'papers');
+    console.log(chalk.green(`Opening knowledge base at: ${kbPath}`));
+    await open(kbPath);
   } catch (error) {
     console.error(chalk.red('Failed to open knowledge base:'), error);
   }
@@ -51,15 +58,21 @@ export async function openKnowledgeBase() {
 
 const openCommand: CommandFunction = (program: Command) => {
   program
-    .command('open <arxivId>')
-    .description('Open the directory containing paper files')
-    .action((arxivId) => {
-      openPaperDirectory(arxivId);
+    .command('open [id]')
+    .description('Open the directory containing a paper')
+    .option('-s, --source', 'Open the LaTeX source directory')
+    .option('-g, --github', 'Open the GitHub repository directory')
+    .action((id, options) => {
+      if (id) {
+        openPaperDirectory(id, options);
+      } else {
+        console.log(chalk.yellow('Please provide a paper ID.'));
+      }
     });
     
   program
     .command('open-kb')
-    .description('Open the entire arXiv knowledge base directory')
+    .description('Open the knowledge base directory')
     .action(() => {
       openKnowledgeBase();
     });

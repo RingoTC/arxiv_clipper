@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import fs from 'fs-extra';
 import { Command } from 'commander';
 import { paperDB } from '../models/Paper';
-import { CommandFunction, CommandOptions, Paper } from '../types';
+import { CommandFunction, CommandOptions, Paper, PaginatedResult } from '../types';
 
 const bibtexCommand: CommandFunction = (program: Command) => {
   program
@@ -13,24 +13,23 @@ const bibtexCommand: CommandFunction = (program: Command) => {
     .option('-o, --output <file>', 'Output to file instead of console')
     .action(async (searchTerms: string[], options: CommandOptions) => {
       try {
-        let papers: Paper[] = [];
+        let result: PaginatedResult<Paper>;
         
-        // Determine which papers to include
         if (options.all) {
-          papers = await paperDB.getAll();
-          console.log(chalk.blue('Exporting BibTeX for all papers'));
+          // Get all papers
+          result = await paperDB.getAllPaginated(1, 1000); // Get a large number of papers
         } else if (options.tag) {
-          papers = await paperDB.getByTag(options.tag);
-          console.log(chalk.blue(`Exporting BibTeX for papers with tag: ${options.tag}`));
+          // Get papers by tag
+          result = await paperDB.getByTagPaginated(options.tag, 1, 1000);
         } else if (searchTerms.length > 0) {
-          papers = await paperDB.searchPapers(searchTerms);
-          console.log(chalk.blue(`Exporting BibTeX for papers matching: ${searchTerms.join(' ')}`));
+          // Search papers by keywords
+          result = await paperDB.searchPapers(searchTerms);
         } else {
-          console.log(chalk.yellow('Please specify search terms, a tag, or use --all to export all papers.'));
+          console.log(chalk.yellow('Please specify search terms, a tag with -t, or use --all for all papers.'));
           return;
         }
         
-        if (papers.length === 0) {
+        if (result.papers.length === 0) {
           console.log(chalk.yellow('No papers found.'));
           return;
         }
@@ -38,7 +37,7 @@ const bibtexCommand: CommandFunction = (program: Command) => {
         // Collect BibTeX entries
         const bibtexEntries: string[] = [];
         
-        papers.forEach(paper => {
+        result.papers.forEach(paper => {
           if (paper.bibtex) {
             bibtexEntries.push(paper.bibtex);
           }

@@ -15,31 +15,30 @@ const bibtexCommand = (program) => {
         .option('-o, --output <file>', 'Output to file instead of console')
         .action(async (searchTerms, options) => {
         try {
-            let papers = [];
-            // Determine which papers to include
+            let result;
             if (options.all) {
-                papers = await Paper_1.paperDB.getAll();
-                console.log(chalk_1.default.blue('Exporting BibTeX for all papers'));
+                // Get all papers
+                result = await Paper_1.paperDB.getAllPaginated(1, 1000); // Get a large number of papers
             }
             else if (options.tag) {
-                papers = await Paper_1.paperDB.getByTag(options.tag);
-                console.log(chalk_1.default.blue(`Exporting BibTeX for papers with tag: ${options.tag}`));
+                // Get papers by tag
+                result = await Paper_1.paperDB.getByTagPaginated(options.tag, 1, 1000);
             }
             else if (searchTerms.length > 0) {
-                papers = await Paper_1.paperDB.searchPapers(searchTerms);
-                console.log(chalk_1.default.blue(`Exporting BibTeX for papers matching: ${searchTerms.join(' ')}`));
+                // Search papers by keywords
+                result = await Paper_1.paperDB.searchPapers(searchTerms);
             }
             else {
-                console.log(chalk_1.default.yellow('Please specify search terms, a tag, or use --all to export all papers.'));
+                console.log(chalk_1.default.yellow('Please specify search terms, a tag with -t, or use --all for all papers.'));
                 return;
             }
-            if (papers.length === 0) {
+            if (result.papers.length === 0) {
                 console.log(chalk_1.default.yellow('No papers found.'));
                 return;
             }
             // Collect BibTeX entries
             const bibtexEntries = [];
-            papers.forEach(paper => {
+            result.papers.forEach(paper => {
                 if (paper.bibtex) {
                     bibtexEntries.push(paper.bibtex);
                 }
