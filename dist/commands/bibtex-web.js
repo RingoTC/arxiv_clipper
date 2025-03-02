@@ -245,9 +245,8 @@ const webCommand = (program) => {
                     // Open directory
                     if (req.url?.startsWith('/api/open/') && req.method === 'GET') {
                         const paperId = req.url.replace('/api/open/', '');
-                        const type = new URL(`http://localhost${req.url}`).searchParams.get('type') || 'parent';
                         try {
-                            await (0, open_2.openPaperDirectory)(paperId, { type: type });
+                            await (0, open_2.openPaperDirectory)(paperId);
                             res.statusCode = 200;
                             res.setHeader('Content-Type', 'application/json');
                             res.end(JSON.stringify({ success: true }));

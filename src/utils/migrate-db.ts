@@ -11,48 +11,38 @@ fs.ensureDirSync(path.dirname(dbPath));
 // Initialize the database
 const db = new sqlite3.Database(dbPath);
 
-// Define column info type
-interface ColumnInfo {
-  name: string;
-  type: string;
+// Migrate the database
+async function migrateDatabase() {
+  return new Promise<void>((resolve, reject) => {
+    // Check if categories column exists
+    db.get("PRAGMA table_info(papers)", (err, rows) => {
+      if (err) {
+        console.error('Error checking table schema:', err);
+        reject(err);
+        return;
+      }
+
+      // Add categories column if it doesn't exist
+      db.run("ALTER TABLE papers ADD COLUMN categories TEXT", (err) => {
+        if (err) {
+          // Column might already exist, which is fine
+          console.log('Categories column already exists or error:', err.message);
+        } else {
+          console.log('Added categories column to papers table');
+        }
+        resolve();
+      });
+    });
+  });
 }
 
-// Check if columns exist and add them if they don't
-db.serialize(() => {
-  // Check if githubUrl column exists
-  db.all("PRAGMA table_info(papers)", (err, rows: ColumnInfo[]) => {
-    if (err) {
-      console.error('Error checking database schema:', err);
-      process.exit(1);
-    }
-
-    // Check if the columns exist
-    const hasGithubUrl = rows && rows.some((row) => row.name === 'githubUrl');
-    const hasLocalGithubPath = rows && rows.some((row) => row.name === 'localGithubPath');
-
-    // Add columns if they don't exist
-    if (!hasGithubUrl) {
-      console.log('Adding githubUrl column to papers table...');
-      db.run('ALTER TABLE papers ADD COLUMN githubUrl TEXT', (err) => {
-        if (err) {
-          console.error('Error adding githubUrl column:', err);
-        } else {
-          console.log('Successfully added githubUrl column');
-        }
-      });
-    }
-
-    if (!hasLocalGithubPath) {
-      console.log('Adding localGithubPath column to papers table...');
-      db.run('ALTER TABLE papers ADD COLUMN localGithubPath TEXT', (err) => {
-        if (err) {
-          console.error('Error adding localGithubPath column:', err);
-        } else {
-          console.log('Successfully added localGithubPath column');
-        }
-      });
-    }
-
-    console.log('Database migration completed');
-  });
-}); 
+// Run migration
+migrateDatabase()
+  .then(() => {
+    console.log('Database migration completed successfully');
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error('Database migration failed:', error);
+    process.exit(1);
+  }); 

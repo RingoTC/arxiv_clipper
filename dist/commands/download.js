@@ -41,6 +41,17 @@ async function download(url, options) {
         // Get abstract
         const abstractElement = await page.waitForSelector('blockquote.abstract');
         const abstract = await abstractElement?.evaluate(el => el.textContent?.replace('Abstract:', '').trim()) || '';
+        // Extract categories/subjects
+        const categories = await page.evaluate(() => {
+            const subjectsElement = document.querySelector('td.tablecell.subjects');
+            if (subjectsElement) {
+                const subjectsText = subjectsElement.textContent || '';
+                // Split by semicolon and remove any leading/trailing whitespace
+                return subjectsText.split(';').map(cat => cat.trim());
+            }
+            return [];
+        });
+        console.log(`Categories: ${categories.join(', ')}`);
         // Create paper directory
         const paperDir = (0, path_1.join)(downloadPath, title);
         await (0, promises_1.mkdir)(paperDir, { recursive: true });
@@ -103,7 +114,7 @@ async function download(url, options) {
             title,
             authors,
             abstract,
-            categories: [],
+            categories,
             publishedDate: new Date().toISOString(),
             updatedDate: new Date().toISOString(),
             url: url,

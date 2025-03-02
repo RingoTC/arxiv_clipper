@@ -289,10 +289,9 @@ const webCommand: CommandFunction = (program: Command) => {
             // Open directory
             if (req.url?.startsWith('/api/open/') && req.method === 'GET') {
               const paperId = req.url.replace('/api/open/', '');
-              const type = new URL(`http://localhost${req.url}`).searchParams.get('type') || 'parent';
               
               try {
-                await openPaperDirectory(paperId, { type: type as any });
+                await openPaperDirectory(paperId);
                 
                 res.statusCode = 200;
                 res.setHeader('Content-Type', 'application/json');

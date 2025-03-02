@@ -10,7 +10,7 @@ const chalk_1 = __importDefault(require("chalk"));
 const path_1 = __importDefault(require("path"));
 const open_1 = __importDefault(require("open"));
 const fs_extra_1 = __importDefault(require("fs-extra"));
-async function openPaperDirectory(arxivId, options = {}) {
+async function openPaperDirectory(arxivId) {
     try {
         // Get paper from database
         const papers = await Paper_1.paperDB.searchPapers(arxivId);
@@ -19,52 +19,15 @@ async function openPaperDirectory(arxivId, options = {}) {
             return;
         }
         const paper = papers[0];
-        // Determine which path to open
-        let pathToOpen;
-        if (options.type === 'github') {
-            if (!paper.localGithubPath) {
-                console.error(chalk_1.default.red(`No GitHub repository found for paper ${paper.title}.`));
-                return;
-            }
-            pathToOpen = paper.localGithubPath;
-        }
-        else if (options.type === 'source') {
-            if (!paper.localSourcePath) {
-                console.error(chalk_1.default.red(`No source files found for paper ${paper.title}.`));
-                return;
-            }
-            // Extract source files if they haven't been extracted yet
-            const sourceDir = path_1.default.join(path_1.default.dirname(paper.localSourcePath), 'source');
-            if (!fs_extra_1.default.existsSync(sourceDir)) {
-                console.log(chalk_1.default.blue(`Extracting source files for ${paper.title}...`));
-                await fs_extra_1.default.ensureDir(sourceDir);
-                await fs_extra_1.default.exec(`tar -xzf "${paper.localSourcePath}" -C "${sourceDir}"`);
-            }
-            pathToOpen = sourceDir;
-        }
-        else if (options.type === 'parent') {
-            // Open the parent directory containing both source and GitHub
-            if (paper.localPdfPath) {
-                pathToOpen = path_1.default.dirname(paper.localPdfPath);
-            }
-            else {
-                console.error(chalk_1.default.red(`No local files found for paper ${paper.title}.`));
-                return;
-            }
+        // Open the parent directory containing all files
+        if (paper.localPdfPath) {
+            const pathToOpen = path_1.default.dirname(paper.localPdfPath);
+            console.log(chalk_1.default.green(`Opening directory for ${paper.title}...`));
+            await (0, open_1.default)(pathToOpen, { wait: false });
         }
         else {
-            // Default to parent directory
-            if (paper.localPdfPath) {
-                pathToOpen = path_1.default.dirname(paper.localPdfPath);
-            }
-            else {
-                console.error(chalk_1.default.red(`No local files found for paper ${paper.title}.`));
-                return;
-            }
-        }
-        if (pathToOpen) {
-            console.log(chalk_1.default.green(`Opening ${options.type || 'parent'} directory for ${paper.title}...`));
-            await (0, open_1.default)(pathToOpen, { wait: false });
+            console.error(chalk_1.default.red(`No local files found for paper ${paper.title}.`));
+            return;
         }
     }
     catch (error) {
@@ -90,21 +53,8 @@ const openCommand = (program) => {
     program
         .command('open <arxivId>')
         .description('Open the directory containing paper files')
-        .option('--github', 'Open the GitHub repository directory')
-        .option('--source', 'Open the LaTeX source directory')
-        .option('--parent', 'Open the parent directory (default)')
-        .action((arxivId, options) => {
-        let type;
-        if (options.github) {
-            type = 'github';
-        }
-        else if (options.source) {
-            type = 'source';
-        }
-        else if (options.parent) {
-            type = 'parent';
-        }
-        openPaperDirectory(arxivId, { type });
+        .action((arxivId) => {
+        openPaperDirectory(arxivId);
     });
     program
         .command('open-kb')

@@ -89,8 +89,8 @@ function openKnowledgeBase() {
 }
 
 // Open paper directory
-function openPaperDirectory(paperId, type) {
-    fetch(`/api/open/${paperId}?type=${type || 'parent'}`, {
+function openPaperDirectory(paperId) {
+    fetch(`/api/open/${paperId}`, {
         method: 'GET'
     })
     .then(response => {
@@ -101,7 +101,7 @@ function openPaperDirectory(paperId, type) {
     })
     .then(data => {
         if (data.success) {
-            showAlert(`Opening ${type || 'paper'} directory...`, 'success');
+            showAlert('Opening paper directory...', 'success');
         } else {
             throw new Error(data.error || 'Unknown error');
         }

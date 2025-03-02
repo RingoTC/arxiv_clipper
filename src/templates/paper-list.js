@@ -58,6 +58,10 @@ paperListStyles.textContent = `
         text-overflow: ellipsis;
     }
     
+    .paper-title:hover {
+        text-decoration: underline;
+    }
+    
     .paper-authors {
         font-size: 13px;
         color: #7f8c8d;
@@ -71,7 +75,9 @@ paperListStyles.textContent = `
         font-size: 12px;
         color: #95a5a6;
         display: flex;
+        flex-wrap: wrap;
         gap: 15px;
+        align-items: center;
     }
     
     .paper-tag {
@@ -82,7 +88,11 @@ paperListStyles.textContent = `
         border-radius: 12px;
         font-size: 12px;
         white-space: nowrap;
-        margin-right: auto;
+    }
+    
+    .paper-subjects {
+        font-style: italic;
+        color: #7f8c8d;
     }
     
     .paper-actions {
@@ -333,26 +343,15 @@ function renderPapers() {
         checkbox.dataset.id = paper.id;
         checkbox.checked = state.selectedPapers.has(paper.id);
         
-        const tagElement = paperElement.querySelector('.paper-tag');
-        if (paper.tag) {
-            tagElement.textContent = paper.tag;
-        } else {
-            tagElement.style.display = 'none';
-        }
-        
         const titleElement = paperElement.querySelector('.paper-title');
         titleElement.textContent = paper.title;
         
-        // Add edit button
-        const editButton = document.createElement('button');
-        editButton.className = 'edit-button';
-        editButton.innerHTML = '<i class="fas fa-edit"></i>';
-        editButton.title = 'Edit paper details';
-        editButton.addEventListener('click', (e) => {
-            e.stopPropagation();
-            openEditModal(paper.id);
+        // Make title clickable to open arxiv website
+        titleElement.style.cursor = 'pointer';
+        titleElement.addEventListener('click', () => {
+            const arxivUrl = `https://arxiv.org/abs/${paper.arxivId || paper.id}`;
+            window.open(arxivUrl, '_blank');
         });
-        titleElement.appendChild(editButton);
         
         const authorsElement = paperElement.querySelector('.paper-authors');
         if (Array.isArray(paper.authors)) {
@@ -361,6 +360,10 @@ function renderPapers() {
             authorsElement.textContent = paper.authors;
         }
         
+        // Set up meta information
+        const metaElement = paperElement.querySelector('.paper-meta');
+        
+        // Date added
         const dateElement = paperElement.querySelector('.paper-date');
         if (paper.publishedDate) {
             dateElement.textContent = `Published: ${new Date(paper.publishedDate).toLocaleDateString()}`;
@@ -368,7 +371,24 @@ function renderPapers() {
             dateElement.textContent = `Added: ${new Date(paper.dateAdded).toLocaleDateString()}`;
         }
         
+        // ArXiv ID
         paperElement.querySelector('.paper-id').textContent = `arXiv ID: ${paper.arxivId || paper.id}`;
+        
+        // Add tag to meta section
+        if (paper.tag) {
+            const tagElement = document.createElement('span');
+            tagElement.className = 'paper-tag';
+            tagElement.textContent = paper.tag;
+            metaElement.appendChild(tagElement);
+        }
+        
+        // Add subjects if available
+        if (paper.categories) {
+            const subjectsElement = document.createElement('span');
+            subjectsElement.className = 'paper-subjects';
+            subjectsElement.textContent = `Subjects: ${paper.categories}`;
+            metaElement.appendChild(subjectsElement);
+        }
         
         // Set up action buttons
         const actionsContainer = paperElement.querySelector('.paper-actions');
@@ -391,20 +411,29 @@ function renderPapers() {
             sourceButton.title = 'Source not available locally';
         }
         
-        // Add GitHub button if available
-        if (paper.localGithubPath) {
-            const githubButton = document.createElement('button');
-            githubButton.className = 'button-info';
-            githubButton.innerHTML = '<i class="fab fa-github"></i> GitHub';
-            githubButton.addEventListener('click', () => openPaperDirectory(paper.id, 'github'));
-            actionsContainer.appendChild(githubButton);
+        // Add GitHub button
+        const githubButton = document.createElement('button');
+        githubButton.className = 'button-info';
+        githubButton.innerHTML = '<i class="fab fa-github"></i> GitHub';
+        
+        if (paper.githubUrl) {
+            // If GitHub URL exists, open the remote repository
+            githubButton.addEventListener('click', () => {
+                window.open(paper.githubUrl, '_blank');
+            });
+        } else {
+            // If no GitHub URL, prompt user to enter one
+            githubButton.addEventListener('click', () => {
+                promptGithubUrl(paper.id);
+            });
         }
+        actionsContainer.appendChild(githubButton);
         
         // Add Open button (opens parent directory)
         const openButton = document.createElement('button');
         openButton.className = 'button-info';
         openButton.innerHTML = '<i class="fas fa-folder-open"></i> Open';
-        openButton.addEventListener('click', () => openPaperDirectory(paper.id, 'parent'));
+        openButton.addEventListener('click', () => openPaperDirectory(paper.id));
         actionsContainer.appendChild(openButton);
         
         // Add to container
@@ -537,6 +566,69 @@ function viewSource(paperId) {
     })
     .catch(error => {
         console.error('Error extracting source:', error);
+        showAlert(`Error: ${error.message}`, 'error');
+    });
+}
+
+// Prompt for GitHub URL and clone repository
+function promptGithubUrl(paperId) {
+    const githubUrl = prompt('Enter GitHub repository URL:');
+    
+    if (!githubUrl) {
+        return; // User cancelled
+    }
+    
+    // Validate URL format
+    if (!githubUrl.startsWith('https://github.com/')) {
+        showAlert('Please enter a valid GitHub URL (https://github.com/...)', 'error');
+        return;
+    }
+    
+    // First update the paper with the GitHub URL
+    fetch(`/api/papers/${paperId}`, {
+        method: 'PATCH',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            githubUrl: githubUrl
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Failed to update paper');
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            showAlert('GitHub URL saved. Cloning repository...', 'success');
+            
+            // Now clone the repository
+            return fetch(`/api/github/clone/${paperId}`, {
+                method: 'POST'
+            });
+        } else {
+            throw new Error(data.error || 'Unknown error');
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Failed to clone repository');
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            showAlert('GitHub repository cloned successfully!', 'success');
+            // Refresh papers to update UI
+            fetchPapers();
+        } else {
+            throw new Error(data.error || 'Unknown error');
+        }
+    })
+    .catch(error => {
+        console.error('Error handling GitHub URL:', error);
         showAlert(`Error: ${error.message}`, 'error');
     });
 }
