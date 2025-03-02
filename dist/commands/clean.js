@@ -7,6 +7,7 @@ const chalk_1 = __importDefault(require("chalk"));
 const fs_extra_1 = __importDefault(require("fs-extra"));
 const inquirer_1 = __importDefault(require("inquirer"));
 const config_1 = require("../utils/config");
+const Paper_1 = require("../models/Paper");
 const cleanCommand = (program) => {
     program
         .command('clean')
@@ -46,9 +47,24 @@ const cleanCommand = (program) => {
                     console.log(chalk_1.default.gray(`Removed tag directory: ${tagDir}`));
                 }
             }
-            // Reset database
-            console.log(chalk_1.default.gray('Resetting database...'));
-            fs_extra_1.default.writeJsonSync(config_1.DATABASE_PATH, { papers: [] }, { spaces: 2 });
+            // Reset SQLite database
+            console.log(chalk_1.default.gray('Resetting SQLite database...'));
+            try {
+                // Get all papers from the database
+                const papers = await Paper_1.paperDB.getAll();
+                if (papers.length > 0) {
+                    // Delete all papers from the database
+                    const paperIds = papers.map(paper => paper.id);
+                    await Paper_1.paperDB.deletePapers(paperIds);
+                    console.log(chalk_1.default.gray(`Removed ${papers.length} papers from SQLite database.`));
+                }
+                else {
+                    console.log(chalk_1.default.gray('SQLite database is already empty.'));
+                }
+            }
+            catch (dbError) {
+                console.error(chalk_1.default.yellow(`Warning: Failed to clean SQLite database: ${dbError.message}`));
+            }
             console.log(chalk_1.default.green('Successfully cleaned all papers and reset the database.'));
         }
         catch (error) {

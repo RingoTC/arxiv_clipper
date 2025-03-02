@@ -2,8 +2,9 @@ import chalk from 'chalk';
 import fs from 'fs-extra';
 import inquirer from 'inquirer';
 import { Command } from 'commander';
-import { DATABASE_PATH, PAPERS_DIR } from '../utils/config';
+import { PAPERS_DIR } from '../utils/config';
 import { CommandFunction, CommandOptions } from '../types';
+import { paperDB } from '../models/Paper';
 
 const cleanCommand: CommandFunction = (program: Command) => {
   program
@@ -51,9 +52,22 @@ const cleanCommand: CommandFunction = (program: Command) => {
           }
         }
         
-        // Reset database
-        console.log(chalk.gray('Resetting database...'));
-        fs.writeJsonSync(DATABASE_PATH, { papers: [] }, { spaces: 2 });
+        // Reset SQLite database
+        console.log(chalk.gray('Resetting SQLite database...'));
+        try {
+          // Get all papers from the database
+          const papers = await paperDB.getAll();
+          if (papers.length > 0) {
+            // Delete all papers from the database
+            const paperIds = papers.map(paper => paper.id);
+            await paperDB.deletePapers(paperIds);
+            console.log(chalk.gray(`Removed ${papers.length} papers from SQLite database.`));
+          } else {
+            console.log(chalk.gray('SQLite database is already empty.'));
+          }
+        } catch (dbError) {
+          console.error(chalk.yellow(`Warning: Failed to clean SQLite database: ${(dbError as Error).message}`));
+        }
         
         console.log(chalk.green('Successfully cleaned all papers and reset the database.'));
       } catch (error) {

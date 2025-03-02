@@ -3,7 +3,6 @@ import fs from 'fs-extra';
 import path from 'path';
 import { Command } from 'commander';
 import http from 'http';
-import { findPapers, deletePapers } from '../utils/database';
 import { CommandFunction, Paper } from '../types';
 import open from 'open';
 import { download } from './download';
@@ -163,7 +162,7 @@ const webCommand: CommandFunction = (program: Command) => {
                 await fs.ensureDir(githubDir);
                 
                 // Clone repository
-                await execAsync(`git clone ${paper.githubUrl} ${githubDir}`);
+                await execAsync(`git clone "${paper.githubUrl}" "${githubDir}"`);
                 
                 // Update paper
                 paper.localGithubPath = githubDir;

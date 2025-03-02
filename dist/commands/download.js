@@ -85,7 +85,8 @@ async function download(url, options) {
             await (0, promises_1.mkdir)(githubDir, { recursive: true });
             // Clone the repository
             try {
-                await execAsync(`git clone ${githubUrl} ${githubDir}`);
+                // Properly quote the path to handle spaces
+                await execAsync(`git clone "${githubUrl}" "${githubDir}"`);
                 localGithubPath = githubDir;
                 spinner.succeed(chalk_1.default.green(`Successfully cloned GitHub repository: ${githubUrl}`));
                 spinner.start('Finalizing paper download...');

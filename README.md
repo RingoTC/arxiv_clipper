@@ -133,7 +133,24 @@ adown pdf 2101.12345  # Open PDF for a paper
 adown source 2101.12345  # Extract LaTeX source
 adown delete 2101.12345  # Delete a paper
 adown clean  # Clean up temporary files
+adown migrate  # Migrate database schema to support GitHub repositories
 ```
+
+## Troubleshooting
+
+### GitHub Repository Issues
+
+If you encounter errors related to GitHub repositories, such as:
+- `table papers has no column named githubUrl`
+- Issues with paths containing spaces when cloning repositories
+
+Run the database migration command to update your schema:
+
+```bash
+adown migrate
+```
+
+This will add the necessary columns to your database to support GitHub repository functionality.
 
 ## License
 

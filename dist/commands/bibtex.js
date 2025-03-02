@@ -5,7 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const chalk_1 = __importDefault(require("chalk"));
 const fs_extra_1 = __importDefault(require("fs-extra"));
-const database_1 = require("../utils/database");
+const Paper_1 = require("../models/Paper");
 const bibtexCommand = (program) => {
     program
         .command('bibtex [searchTerms...]')
@@ -13,20 +13,20 @@ const bibtexCommand = (program) => {
         .option('-t, --tag <tag>', 'Filter papers by tag')
         .option('-a, --all', 'Export all papers without filtering', false)
         .option('-o, --output <file>', 'Output to file instead of console')
-        .action((searchTerms, options) => {
+        .action(async (searchTerms, options) => {
         try {
             let papers = [];
             // Determine which papers to include
             if (options.all) {
-                papers = (0, database_1.findPapers)([]);
+                papers = await Paper_1.paperDB.getAll();
                 console.log(chalk_1.default.blue('Exporting BibTeX for all papers'));
             }
             else if (options.tag) {
-                papers = (0, database_1.findPapersByTag)(options.tag);
+                papers = await Paper_1.paperDB.getByTag(options.tag);
                 console.log(chalk_1.default.blue(`Exporting BibTeX for papers with tag: ${options.tag}`));
             }
             else if (searchTerms.length > 0) {
-                papers = (0, database_1.findPapers)(searchTerms);
+                papers = await Paper_1.paperDB.searchPapers(searchTerms);
                 console.log(chalk_1.default.blue(`Exporting BibTeX for papers matching: ${searchTerms.join(' ')}`));
             }
             else {

@@ -6,22 +6,15 @@ const packageJson = require('../package.json');
 
 // Import commands
 import downloadCommand from './commands/download';
-// @ts-ignore
 import listCommand from './commands/list';
-// @ts-ignore
 import deleteCommand from './commands/delete';
-// @ts-ignore
 import sourceCommand from './commands/source';
-// @ts-ignore
 import pdfCommand from './commands/pdf';
-// @ts-ignore
 import cleanCommand from './commands/clean';
-// @ts-ignore
 import bibtexCommand from './commands/bibtex';
-// @ts-ignore
 import webCommand from './commands/bibtex-web';
-// @ts-ignore
 import openCommand from './commands/open';
+import migrateCommand from './commands/migrate';
 import { CommandOptions } from './types';
 
 // Set up CLI
@@ -41,6 +34,7 @@ cleanCommand(program);
 bibtexCommand(program);
 webCommand(program);
 openCommand(program);
+migrateCommand(program);
 
 // Handle direct URL input (default to download command)
 program

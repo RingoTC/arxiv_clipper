@@ -9,22 +9,15 @@ const chalk_1 = __importDefault(require("chalk"));
 const packageJson = require('../package.json');
 // Import commands
 const download_1 = __importDefault(require("./commands/download"));
-// @ts-ignore
 const list_1 = __importDefault(require("./commands/list"));
-// @ts-ignore
 const delete_1 = __importDefault(require("./commands/delete"));
-// @ts-ignore
 const source_1 = __importDefault(require("./commands/source"));
-// @ts-ignore
 const pdf_1 = __importDefault(require("./commands/pdf"));
-// @ts-ignore
 const clean_1 = __importDefault(require("./commands/clean"));
-// @ts-ignore
 const bibtex_1 = __importDefault(require("./commands/bibtex"));
-// @ts-ignore
 const bibtex_web_1 = __importDefault(require("./commands/bibtex-web"));
-// @ts-ignore
 const open_1 = __importDefault(require("./commands/open"));
+const migrate_1 = __importDefault(require("./commands/migrate"));
 // Set up CLI
 const program = new commander_1.Command();
 program
@@ -41,6 +34,7 @@ program
 (0, bibtex_1.default)(program);
 (0, bibtex_web_1.default)(program);
 (0, open_1.default)(program);
+(0, migrate_1.default)(program);
 // Handle direct URL input (default to download command)
 program
     .arguments('[url]')

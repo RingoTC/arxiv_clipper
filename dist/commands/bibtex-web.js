@@ -138,7 +138,7 @@ const webCommand = (program) => {
                             const githubDir = path_1.default.join(paperDir, 'github');
                             await fs_extra_1.default.ensureDir(githubDir);
                             // Clone repository
-                            await execAsync(`git clone ${paper.githubUrl} ${githubDir}`);
+                            await execAsync(`git clone "${paper.githubUrl}" "${githubDir}"`);
                             // Update paper
                             paper.localGithubPath = githubDir;
                             // Save to database

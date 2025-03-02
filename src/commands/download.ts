@@ -108,7 +108,8 @@ export async function download(url: string, options: DownloadOptions) {
       
       // Clone the repository
       try {
-        await execAsync(`git clone ${githubUrl} ${githubDir}`);
+        // Properly quote the path to handle spaces
+        await execAsync(`git clone "${githubUrl}" "${githubDir}"`);
         localGithubPath = githubDir;
         spinner.succeed(chalk.green(`Successfully cloned GitHub repository: ${githubUrl}`));
         spinner.start('Finalizing paper download...');
