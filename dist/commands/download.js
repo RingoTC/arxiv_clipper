@@ -3,59 +3,107 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.download = download;
+const puppeteer_1 = __importDefault(require("puppeteer"));
+const path_1 = require("path");
+const os_1 = require("os");
+const promises_1 = require("fs/promises");
+const Paper_1 = require("../models/Paper");
+const ora_1 = __importDefault(require("ora"));
 const chalk_1 = __importDefault(require("chalk"));
-const arxiv_1 = require("../utils/arxiv");
-const database_1 = require("../utils/database");
+const axios_1 = __importDefault(require("axios"));
+const fs_1 = __importDefault(require("fs"));
+async function download(url, options) {
+    const spinner = (0, ora_1.default)('Downloading paper...').start();
+    try {
+        const arxivId = url.split('/').pop()?.replace('v', '') || '';
+        if (!arxivId) {
+            throw new Error('Invalid arXiv URL');
+        }
+        const browser = await puppeteer_1.default.launch({ headless: 'new' });
+        const page = await browser.newPage();
+        // Configure download path
+        const downloadPath = (0, path_1.join)((0, os_1.homedir)(), 'Development', 'arxiv', options.tag);
+        await (0, promises_1.mkdir)(downloadPath, { recursive: true });
+        await page.goto(url, { waitUntil: 'networkidle0' });
+        // Get paper title
+        const titleElement = await page.waitForSelector('h1.title');
+        const title = await titleElement?.evaluate(el => el.textContent?.replace('Title:', '').trim()) || '';
+        // Get authors
+        const authorsElement = await page.waitForSelector('div.authors');
+        const authors = await authorsElement?.evaluate(el => {
+            const authorsText = el.textContent?.replace('Authors:', '').trim() || '';
+            return authorsText.split(',').map(author => author.trim());
+        }) || [];
+        // Get abstract
+        const abstractElement = await page.waitForSelector('blockquote.abstract');
+        const abstract = await abstractElement?.evaluate(el => el.textContent?.replace('Abstract:', '').trim()) || '';
+        // Create paper directory
+        const paperDir = (0, path_1.join)(downloadPath, title);
+        await (0, promises_1.mkdir)(paperDir, { recursive: true });
+        // Get PDF URL
+        const pdfUrl = `https://arxiv.org/pdf/${arxivId}.pdf`;
+        // Download PDF using axios
+        const pdfResponse = await (0, axios_1.default)({
+            method: 'get',
+            url: pdfUrl,
+            responseType: 'stream'
+        });
+        const pdfPath = (0, path_1.join)(paperDir, `${arxivId}.pdf`);
+        const pdfWriter = fs_1.default.createWriteStream(pdfPath);
+        pdfResponse.data.pipe(pdfWriter);
+        await new Promise((resolve, reject) => {
+            pdfWriter.on('finish', () => resolve());
+            pdfWriter.on('error', (err) => reject(err));
+        });
+        // Get source URL
+        const sourceUrl = `https://arxiv.org/e-print/${arxivId}`;
+        // Download source using axios
+        const sourceResponse = await (0, axios_1.default)({
+            method: 'get',
+            url: sourceUrl,
+            responseType: 'stream'
+        });
+        const sourcePath = (0, path_1.join)(paperDir, `${arxivId}.tar.gz`);
+        const sourceWriter = fs_1.default.createWriteStream(sourcePath);
+        sourceResponse.data.pipe(sourceWriter);
+        await new Promise((resolve, reject) => {
+            sourceWriter.on('finish', () => resolve());
+            sourceWriter.on('error', (err) => reject(err));
+        });
+        await browser.close();
+        // Save to database
+        await Paper_1.paperDB.add({
+            id: arxivId,
+            title,
+            authors,
+            abstract,
+            categories: [],
+            publishedDate: new Date().toISOString(),
+            updatedDate: new Date().toISOString(),
+            url: url,
+            tag: options.tag,
+            pdfUrl,
+            sourceUrl,
+            localPdfPath: pdfPath,
+            localSourcePath: sourcePath,
+            dateAdded: new Date().toISOString(),
+            arxivId
+        });
+        spinner.succeed(chalk_1.default.green(`Successfully downloaded paper: ${title}`));
+    }
+    catch (error) {
+        spinner.fail(chalk_1.default.red('Failed to download paper'));
+        console.error(error);
+    }
+}
 const downloadCommand = (program) => {
     program
         .command('download <url>')
-        .alias('d')
         .description('Download a paper from arXiv')
         .option('-t, --tag <tag>', 'Tag for organizing papers', 'default')
-        .action(async (url, options) => {
-        try {
-            console.log(chalk_1.default.blue('Downloading paper...'));
-            // Extract arXiv ID from URL
-            const arxivId = (0, arxiv_1.extractArxivId)(url);
-            console.log(chalk_1.default.gray(`ArXiv ID: ${arxivId}`));
-            // Get paper metadata
-            console.log(chalk_1.default.gray('Fetching paper metadata...'));
-            const paper = await (0, arxiv_1.getPaperMetadata)(arxivId);
-            // Use the tag from options object
-            const tag = options.tag || 'default';
-            console.log(chalk_1.default.gray(`Using tag: ${tag}`));
-            const paperDir = (0, arxiv_1.createPaperDirectory)(paper, tag);
-            console.log(chalk_1.default.gray(`Created directory: ${paperDir}`));
-            // Download PDF
-            console.log(chalk_1.default.gray('Downloading PDF...'));
-            const pdfPath = await (0, arxiv_1.downloadPdf)(arxivId, paperDir);
-            // Download source files
-            console.log(chalk_1.default.gray('Downloading source files...'));
-            const sourcePath = await (0, arxiv_1.downloadSource)(arxivId, paperDir);
-            // Get and save BibTeX
-            console.log(chalk_1.default.gray('Fetching BibTeX citation...'));
-            const bibtex = await (0, arxiv_1.getBibTeX)(arxivId);
-            const bibtexPath = await (0, arxiv_1.saveBibTeX)(bibtex, paperDir);
-            // Add paper to database
-            const paperWithTag = {
-                ...paper,
-                tag,
-                pdfPath,
-                sourcePath,
-                bibtexPath,
-                bibtex,
-                downloadDate: new Date().toISOString()
-            };
-            (0, database_1.addPaper)(paperWithTag);
-            console.log(chalk_1.default.green(`\nSuccessfully downloaded paper: ${paper.title || 'Untitled'}`));
-            console.log(chalk_1.default.gray(`PDF: ${pdfPath}`));
-            console.log(chalk_1.default.gray(`Source: ${sourcePath}`));
-            console.log(chalk_1.default.gray(`BibTeX: ${bibtexPath}`));
-        }
-        catch (error) {
-            console.error(chalk_1.default.red(`Error: ${error.message}`));
-            process.exit(1);
-        }
+        .action((url, options) => {
+        download(url, { tag: options.tag });
     });
 };
 exports.default = downloadCommand;

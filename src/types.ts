@@ -15,6 +15,12 @@ export interface Paper {
   bibtexPath?: string;
   bibtex?: string;
   downloadDate?: string;
+  pdfUrl?: string;
+  sourceUrl?: string;
+  localPdfPath?: string;
+  localSourcePath?: string;
+  dateAdded?: string;
+  arxivId?: string;
 }
 
 export interface Database {

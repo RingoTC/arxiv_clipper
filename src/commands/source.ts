@@ -1,12 +1,15 @@
-import { paperDB } from '../models/Paper.js';
+import { paperDB } from '../models/Paper';
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 import { exec } from 'child_process';
-import { promisify } from 'util';
+import { Command } from 'commander';
+import { CommandFunction } from '../types';
 
-const execAsync = promisify(exec);
+interface SourceOptions {
+  tag?: string;
+}
 
-export async function openSource(keywords: string[]) {
+export async function openSource(keywords: string[], options: SourceOptions) {
   try {
     const papers = await paperDB.searchPapers(keywords);
     
@@ -14,23 +17,44 @@ export async function openSource(keywords: string[]) {
       console.log(chalk.yellow('No papers found.'));
       return;
     }
-
+    
     const choices = papers.map((paper, index) => ({
-      name: `${index + 1}. ${paper.title} (${paper.arxivId})`,
-      value: paper
+      name: `${index + 1}. ${paper.title} (${paper.arxivId || paper.id})`,
+      value: paper.sourcePath
     }));
-
-    const { selectedPaper } = await inquirer.prompt([{
+    
+    const { selectedSource } = await inquirer.prompt([{
       type: 'list',
-      name: 'selectedPaper',
+      name: 'selectedSource',
       message: 'Select a paper to open source:',
-      choices
+      choices,
+      default: choices[0].value
     }]);
-
-    // Open source in Cursor
-    await execAsync(`cursor ${selectedPaper.sourcePath}`);
-    console.log(chalk.green(`Opening source for: ${selectedPaper.title}`));
+    
+    if (!selectedSource) {
+      console.log(chalk.yellow('No source selected.'));
+      return;
+    }
+    
+    // Open source with default application
+    exec(`open "${selectedSource}"`, (error: Error | null) => {
+      if (error) {
+        console.error(chalk.red('Failed to open source:'), error);
+      }
+    });
   } catch (error) {
     console.error(chalk.red('Failed to open source:'), error);
   }
-} 
+}
+
+const sourceCommand: CommandFunction = (program: Command) => {
+  program
+    .command('source [keywords...]')
+    .description('Open a paper source')
+    .option('-t, --tag <tag>', 'Filter papers by tag')
+    .action((keywords, options) => {
+      openSource(keywords, options);
+    });
+};
+
+export default sourceCommand; 

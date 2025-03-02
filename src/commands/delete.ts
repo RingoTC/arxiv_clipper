@@ -1,7 +1,8 @@
-import { paperDB } from '../models/Paper.js';
+import { paperDB } from '../models/Paper';
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 import { unlink } from 'fs/promises';
+import { existsSync } from 'fs';
 
 interface DeleteOptions {
   tag?: string;
@@ -23,7 +24,7 @@ export async function deleteItems(keywords: string[], options: DeleteOptions) {
     }
 
     const choices = papers.map((paper, index) => ({
-      name: `${index + 1}. ${paper.title} (${paper.arxivId})`,
+      name: `${index + 1}. ${paper.title} (${paper.arxivId || paper.id})`,
       value: paper.id
     }));
 
@@ -43,8 +44,12 @@ export async function deleteItems(keywords: string[], options: DeleteOptions) {
     // Delete files
     for (const paper of papers.filter(p => selectedPapers.includes(p.id))) {
       try {
-        await unlink(paper.pdfPath);
-        await unlink(paper.sourcePath);
+        if (paper.pdfPath && existsSync(paper.pdfPath)) {
+          await unlink(paper.pdfPath);
+        }
+        if (paper.sourcePath && existsSync(paper.sourcePath)) {
+          await unlink(paper.sourcePath);
+        }
       } catch (error) {
         console.warn(chalk.yellow(`Warning: Could not delete some files for paper: ${paper.title}`));
       }
@@ -56,4 +61,20 @@ export async function deleteItems(keywords: string[], options: DeleteOptions) {
   } catch (error) {
     console.error(chalk.red('Failed to delete papers:'), error);
   }
-} 
+}
+
+// Add default export for the command
+import { Command } from 'commander';
+import { CommandFunction } from '../types';
+
+const deleteCommand: CommandFunction = (program: Command) => {
+  program
+    .command('delete [keywords...]')
+    .description('Delete papers from the database')
+    .option('-t, --tag <tag>', 'Delete all papers with a specific tag')
+    .action((keywords, options) => {
+      deleteItems(keywords, options);
+    });
+};
+
+export default deleteCommand; 

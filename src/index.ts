@@ -2,7 +2,7 @@
 
 import { Command } from 'commander';
 import chalk from 'chalk';
-import * as packageJson from '../package.json';
+const packageJson = require('../package.json');
 
 // Import commands
 import downloadCommand from './commands/download';
@@ -19,7 +19,7 @@ import cleanCommand from './commands/clean';
 // @ts-ignore
 import bibtexCommand from './commands/bibtex';
 // @ts-ignore
-import bibtexWebCommand from './commands/bibtex-web';
+import webCommand from './commands/bibtex-web';
 import { CommandOptions } from './types';
 
 // Set up CLI
@@ -37,7 +37,7 @@ sourceCommand(program);
 pdfCommand(program);
 cleanCommand(program);
 bibtexCommand(program);
-bibtexWebCommand(program);
+webCommand(program);
 
 // Handle direct URL input (default to download command)
 program

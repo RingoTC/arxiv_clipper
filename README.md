@@ -8,7 +8,7 @@ A command-line tool for downloading and managing arXiv papers, including both PD
 - Organize papers with tags
 - List and search your paper collection
 - Export BibTeX citations
-- Web interface for BibTeX export with search and selection
+- Web interface for managing papers and BibTeX export
 
 ## Installation
 
@@ -79,6 +79,36 @@ You can specify a custom port:
 
 ```bash
 adown bibtex-web -p 8080
+```
+
+### Comprehensive Web Interface
+
+Start the comprehensive web interface for managing all your arXiv papers:
+
+```bash
+adown web
+```
+
+This will start a local web server and open your browser. The web interface provides a complete management system for your papers:
+
+- **List Management**:
+  - View all your papers in a clean, organized interface
+  - Search papers by title, author, or abstract
+  - Filter papers by tag
+  - Delete papers individually or in bulk
+  - Open PDF files directly from the interface
+  - Extract and view LaTeX source files
+  - Export BibTeX citations directly from the list view
+  - Preview, copy, or download BibTeX entries for selected papers
+
+- **Paper Download**:
+  - Download new papers from arXiv URLs
+  - Add tags during download for better organization
+
+You can specify a custom port:
+
+```bash
+adown web -p 8080
 ```
 
 ### Other Commands

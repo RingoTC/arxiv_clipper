@@ -3,57 +3,51 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.openSource = openSource;
+const Paper_1 = require("../models/Paper");
+const inquirer_1 = __importDefault(require("inquirer"));
 const chalk_1 = __importDefault(require("chalk"));
 const child_process_1 = require("child_process");
-const database_1 = require("../utils/database");
+async function openSource(keywords, options) {
+    try {
+        const papers = await Paper_1.paperDB.searchPapers(keywords);
+        if (papers.length === 0) {
+            console.log(chalk_1.default.yellow('No papers found.'));
+            return;
+        }
+        const choices = papers.map((paper, index) => ({
+            name: `${index + 1}. ${paper.title} (${paper.arxivId || paper.id})`,
+            value: paper.sourcePath
+        }));
+        const { selectedSource } = await inquirer_1.default.prompt([{
+                type: 'list',
+                name: 'selectedSource',
+                message: 'Select a paper to open source:',
+                choices,
+                default: choices[0].value
+            }]);
+        if (!selectedSource) {
+            console.log(chalk_1.default.yellow('No source selected.'));
+            return;
+        }
+        // Open source with default application
+        (0, child_process_1.exec)(`open "${selectedSource}"`, (error) => {
+            if (error) {
+                console.error(chalk_1.default.red('Failed to open source:'), error);
+            }
+        });
+    }
+    catch (error) {
+        console.error(chalk_1.default.red('Failed to open source:'), error);
+    }
+}
 const sourceCommand = (program) => {
     program
-        .command('source [searchTerms...]')
-        .description('Open source files of a paper')
-        .action((searchTerms, options) => {
-        try {
-            if (searchTerms.length === 0) {
-                console.log(chalk_1.default.yellow('Please specify search terms to find a paper.'));
-                return;
-            }
-            // Find papers matching search terms
-            const papers = (0, database_1.findPapers)(searchTerms);
-            if (papers.length === 0) {
-                console.log(chalk_1.default.yellow('No papers found.'));
-                return;
-            }
-            if (papers.length > 1) {
-                console.log(chalk_1.default.yellow('Multiple papers found. Please refine your search.'));
-                console.log(chalk_1.default.gray('Matching papers:'));
-                papers.forEach((paper, index) => {
-                    console.log(chalk_1.default.gray(`${index + 1}. ${paper.title || 'Untitled'}`));
-                });
-                return;
-            }
-            const paper = papers[0];
-            if (!paper.sourcePath) {
-                console.log(chalk_1.default.yellow('No source files found for this paper.'));
-                return;
-            }
-            console.log(chalk_1.default.blue(`Opening source files for: ${paper.title || 'Untitled'}`));
-            // Open source files
-            const command = process.platform === 'darwin'
-                ? `open "${paper.sourcePath}"`
-                : process.platform === 'win32'
-                    ? `start "" "${paper.sourcePath}"`
-                    : `xdg-open "${paper.sourcePath}"`;
-            (0, child_process_1.exec)(command, (error) => {
-                if (error) {
-                    console.error(chalk_1.default.red(`Error opening source files: ${error.message}`));
-                    return;
-                }
-                console.log(chalk_1.default.green('Source files opened successfully.'));
-            });
-        }
-        catch (error) {
-            console.error(chalk_1.default.red(`Error: ${error.message}`));
-            process.exit(1);
-        }
+        .command('source [keywords...]')
+        .description('Open a paper source')
+        .option('-t, --tag <tag>', 'Filter papers by tag')
+        .action((keywords, options) => {
+        openSource(keywords, options);
     });
 };
 exports.default = sourceCommand;

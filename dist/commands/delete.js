@@ -3,88 +3,68 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-const chalk_1 = __importDefault(require("chalk"));
-const fs_extra_1 = __importDefault(require("fs-extra"));
+exports.deleteItems = deleteItems;
+const Paper_1 = require("../models/Paper");
 const inquirer_1 = __importDefault(require("inquirer"));
-const database_1 = require("../utils/database");
+const chalk_1 = __importDefault(require("chalk"));
+const promises_1 = require("fs/promises");
+const fs_1 = require("fs");
+async function deleteItems(keywords, options) {
+    try {
+        if (options.tag) {
+            await Paper_1.paperDB.deleteByTag(options.tag);
+            console.log(chalk_1.default.green(`Successfully deleted all papers with tag: ${options.tag}`));
+            return;
+        }
+        const papers = await Paper_1.paperDB.searchPapers(keywords);
+        if (papers.length === 0) {
+            console.log(chalk_1.default.yellow('No papers found to delete.'));
+            return;
+        }
+        const choices = papers.map((paper, index) => ({
+            name: `${index + 1}. ${paper.title} (${paper.arxivId || paper.id})`,
+            value: paper.id
+        }));
+        const { selectedPapers } = await inquirer_1.default.prompt([{
+                type: 'checkbox',
+                name: 'selectedPapers',
+                message: 'Select papers to delete:',
+                choices,
+                default: [choices[0].value]
+            }]);
+        if (selectedPapers.length === 0) {
+            console.log(chalk_1.default.yellow('No papers selected for deletion.'));
+            return;
+        }
+        // Delete files
+        for (const paper of papers.filter(p => selectedPapers.includes(p.id))) {
+            try {
+                if (paper.pdfPath && (0, fs_1.existsSync)(paper.pdfPath)) {
+                    await (0, promises_1.unlink)(paper.pdfPath);
+                }
+                if (paper.sourcePath && (0, fs_1.existsSync)(paper.sourcePath)) {
+                    await (0, promises_1.unlink)(paper.sourcePath);
+                }
+            }
+            catch (error) {
+                console.warn(chalk_1.default.yellow(`Warning: Could not delete some files for paper: ${paper.title}`));
+            }
+        }
+        // Delete from database
+        await Paper_1.paperDB.deletePapers(selectedPapers);
+        console.log(chalk_1.default.green('Successfully deleted selected papers.'));
+    }
+    catch (error) {
+        console.error(chalk_1.default.red('Failed to delete papers:'), error);
+    }
+}
 const deleteCommand = (program) => {
     program
-        .command('delete [searchTerms...]')
-        .description('Delete papers')
+        .command('delete [keywords...]')
+        .description('Delete papers from the database')
         .option('-t, --tag <tag>', 'Delete all papers with a specific tag')
-        .option('-f, --force', 'Force delete without confirmation', false)
-        .action(async (searchTerms, options) => {
-        try {
-            let papers = [];
-            // Determine which papers to delete
-            if (options.tag) {
-                papers = (0, database_1.findPapersByTag)(options.tag);
-                console.log(chalk_1.default.blue(`Finding papers with tag: ${options.tag}`));
-            }
-            else if (searchTerms.length > 0) {
-                papers = (0, database_1.findPapers)(searchTerms);
-                console.log(chalk_1.default.blue(`Finding papers matching: ${searchTerms.join(' ')}`));
-            }
-            else {
-                console.log(chalk_1.default.yellow('Please specify search terms or a tag to delete papers.'));
-                return;
-            }
-            if (papers.length === 0) {
-                console.log(chalk_1.default.yellow('No papers found.'));
-                return;
-            }
-            // Display papers to be deleted
-            console.log(chalk_1.default.gray(`Found ${papers.length} papers to delete:`));
-            console.log();
-            papers.forEach((paper, index) => {
-                console.log(chalk_1.default.red(`${index + 1}. ${paper.title || 'Untitled'}`));
-                // Display authors
-                if (paper.authors && paper.authors.length > 0) {
-                    const authorText = paper.authors.join(', ');
-                    console.log(chalk_1.default.gray(`   Authors: ${authorText}`));
-                }
-                // Display tag
-                console.log(chalk_1.default.gray(`   Tag: ${paper.tag || 'default'}`));
-                // Display ID
-                console.log(chalk_1.default.gray(`   ID: ${paper.id}`));
-                console.log(); // Add a blank line between papers
-            });
-            // Confirm deletion
-            let shouldDelete = options.force;
-            if (!shouldDelete) {
-                const answers = await inquirer_1.default.prompt([
-                    {
-                        type: 'confirm',
-                        name: 'confirm',
-                        message: chalk_1.default.red(`Are you sure you want to delete these ${papers.length} papers?`),
-                        default: false
-                    }
-                ]);
-                shouldDelete = answers.confirm;
-            }
-            if (!shouldDelete) {
-                console.log(chalk_1.default.yellow('Operation cancelled.'));
-                return;
-            }
-            // Delete papers
-            const paperIds = papers.map(paper => paper.id);
-            // Delete files
-            papers.forEach(paper => {
-                // Get the directory containing the paper files
-                const paperDir = paper.pdfPath ? paper.pdfPath.replace('/paper.pdf', '') : null;
-                if (paperDir && fs_extra_1.default.existsSync(paperDir)) {
-                    fs_extra_1.default.removeSync(paperDir);
-                    console.log(chalk_1.default.gray(`Removed directory: ${paperDir}`));
-                }
-            });
-            // Delete from database
-            (0, database_1.deletePapers)(paperIds);
-            console.log(chalk_1.default.green(`Successfully deleted ${papers.length} papers.`));
-        }
-        catch (error) {
-            console.error(chalk_1.default.red(`Error: ${error.message}`));
-            process.exit(1);
-        }
+        .action((keywords, options) => {
+        deleteItems(keywords, options);
     });
 };
 exports.default = deleteCommand;
